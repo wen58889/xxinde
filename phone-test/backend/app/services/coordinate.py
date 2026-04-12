@@ -4,6 +4,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.calibration import CalibrationData
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class CoordinateMapper:
         self.offset_x = 0.0
         self.offset_y = 0.0
         self._transform = None
+        self._calibrated = False
         if calibration:
             self._load(calibration)
 
@@ -31,10 +33,11 @@ class CoordinateMapper:
             self._px_br = px[2] if len(px) > 2 else px[1]
             self._mx_tl = mx[0]
             self._mx_br = mx[2] if len(mx) > 2 else mx[1]
+            self._calibrated = True
 
     def pixel_to_mech(self, px: float, py: float) -> tuple[float, float]:
-        if self._transform is None and hasattr(self, "_px_tl"):
-            # Linear interpolation
+        if self._calibrated and hasattr(self, "_px_tl"):
+            # Linear interpolation using calibration points
             px_w = self._px_br[0] - self._px_tl[0]
             px_h = self._px_br[1] - self._px_tl[1]
             mx_w = self._mx_br[0] - self._mx_tl[0]
@@ -46,9 +49,32 @@ class CoordinateMapper:
             mx = self._mx_tl[0] + (px - self._px_tl[0]) / px_w * mx_w + self.offset_x
             my = self._mx_tl[1] + (py - self._px_tl[1]) / px_h * mx_h + self.offset_y
         else:
-            # Fallback: direct proportional mapping (1280x720 -> 150x150)
-            mx = (px / 1280) * MECH_X_MAX + self.offset_x
-            my = (py / 720) * MECH_Y_MAX + self.offset_y
+            # Fallback: use screen_crop region for proportional mapping
+            # This is more accurate than raw 1280x720 -> 150x150 because
+            # it accounts for the phone screen's position within the camera image.
+            settings = get_settings()
+            crop = settings.screen_crop
+            if crop:
+                parts = crop.split(",")
+                if len(parts) == 4:
+                    cx1, cy1, cx2, cy2 = float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])
+                    # Map pixel within crop region to [0, MECH_MAX]
+                    # Pixels outside crop are extrapolated
+                    crop_w = cx2 - cx1
+                    crop_h = cy2 - cy1
+                    if crop_w > 0 and crop_h > 0:
+                        mx = ((px - cx1) / crop_w) * MECH_X_MAX + self.offset_x
+                        my = ((py - cy1) / crop_h) * MECH_Y_MAX + self.offset_y
+                    else:
+                        mx = (px / 1280) * MECH_X_MAX + self.offset_x
+                        my = (py / 720) * MECH_Y_MAX + self.offset_y
+                else:
+                    mx = (px / 1280) * MECH_X_MAX + self.offset_x
+                    my = (py / 720) * MECH_Y_MAX + self.offset_y
+            else:
+                # No crop info: raw proportional mapping
+                mx = (px / 1280) * MECH_X_MAX + self.offset_x
+                my = (py / 720) * MECH_Y_MAX + self.offset_y
 
         # Clamp
         mx = max(0.0, min(MECH_X_MAX, mx))
