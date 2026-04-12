@@ -16,6 +16,11 @@ TAP_Z = 0.0         # Touch height
 DEFAULT_XY_FEED = 6000
 DEFAULT_Z_FEED = 3000
 
+# Safety margin: Klipper may reject moves at exact 0.0 due to
+# homing position overshoot (e.g. -0.006 after G28).
+# Add a small epsilon to keep coordinates safely within bounds.
+_COORD_EPSILON = 0.1  # mm
+
 
 def _validate_coord(x: float, y: float, z: float | None = None):
     if not (X_MIN <= x <= X_MAX):
@@ -39,6 +44,10 @@ class MotionController:
         Klipper 启动后处于 unhomed 状态，任何绝对移动都会被拒绝。
         遇到 'out of range' / 'must home' 时先 G28 归位再重试。
         """
+        # Clamp coordinates with epsilon margin to avoid Klipper
+        # "Move out of range" errors from homing overshoot (e.g. -0.006)
+        x = max(X_MIN + _COORD_EPSILON, min(X_MAX - _COORD_EPSILON, x))
+        y = max(Y_MIN + _COORD_EPSILON, min(Y_MAX - _COORD_EPSILON, y))
         _validate_coord(x, y)
         feed = _clamp_feed(feed, XY_MAX_FEED)
         z_feed = _clamp_feed(DEFAULT_Z_FEED, Z_MAX_FEED)
@@ -50,7 +59,16 @@ class MotionController:
             if "out of range" in err or "home" in err:
                 logger.warning("[%s] Move rejected (unhomed?), auto-homing: %s", self.client.ip, e)
                 await self.client.send_gcode("G28")
-                await self.client.send_gcode(f"G1 Z{Z_SAFE} F{z_feed}")
+                # After homing, the position may slightly overshoot past 0
+                # (e.g. -0.006). Move to a safe positive position first.
+                try:
+                    await self.client.send_gcode(
+                        f"G1 X{_COORD_EPSILON:.1f} Y{_COORD_EPSILON:.1f} Z{Z_SAFE} F{z_feed}"
+                    )
+                except DeviceConnectionError:
+                    # If even this fails, the position_min in Klipper config
+                    # may allow negative values; just proceed.
+                    pass
             else:
                 raise
         await self.client.send_gcode(f"G1 X{x:.2f} Y{y:.2f} F{feed}")
@@ -63,7 +81,8 @@ class MotionController:
         _validate_coord(x, y, z)
         await self._safe_move_xy(x, y)
         z_feed = _clamp_feed(DEFAULT_Z_FEED, Z_MAX_FEED)
-        # Lower to touch
+        # Lower to touch (clamp Z with epsilon to avoid out-of-range)
+        z = max(Z_MIN + _COORD_EPSILON, min(Z_MAX - _COORD_EPSILON, z))
         await self.client.send_gcode(f"G1 Z{z:.2f} F{z_feed}")
         # Raise back
         await self.client.send_gcode(f"G1 Z{Z_SAFE} F{z_feed}")
@@ -73,6 +92,7 @@ class MotionController:
         _validate_coord(x, y, z)
         await self._safe_move_xy(x, y)
         z_feed = _clamp_feed(DEFAULT_Z_FEED, Z_MAX_FEED)
+        z = max(Z_MIN + _COORD_EPSILON, min(Z_MAX - _COORD_EPSILON, z))
         await self.client.send_gcode(f"G1 Z{z:.2f} F{z_feed}")
         await self.client.send_gcode(f"G4 P{int(seconds * 1000)}")
         await self.client.send_gcode(f"G1 Z{Z_SAFE} F{z_feed}")
