@@ -1,0 +1,61 @@
+# 抖音自动化测试流程模板
+# 视觉识别：OpenCV 模板匹配 + PaddleOCR
+# 模板图片位于: templates/icons/抖音/
+app: 抖音
+name: 抖音刷视频测试
+version: 2
+
+steps:
+  - action: tap_icon
+    description: 点击抖音图标启动APP
+    template: 抖音
+    threshold: 0.85
+    wait: 3
+
+  - action: detect_state
+    description: 检测抖音首页
+    ocr_keywords: [推荐, 关注]
+    timeout: 10
+
+  - action: swipe
+    description: 上滑刷新视频
+    direction: up
+    duration: 0.5
+    repeat: 3
+    wait: [2, 4]
+
+  - action: detect_state
+    description: 检查视频是否正常播放
+    templates: [点赞按钮, 评论按钮, 分享按钮]
+    ocr_keywords: [赞]
+    timeout: 5
+
+  - action: tap_icon
+    description: 点击点赞按钮
+    template: 点赞按钮
+    threshold: 0.80
+    wait: [1, 2]
+
+  - action: swipe
+    description: 继续刷视频
+    direction: up
+    duration: 0.5
+    repeat: 5
+    wait: [3, 6]
+
+  - action: tap_icon
+    description: 点击评论按钮
+    template: 评论按钮
+    threshold: 0.80
+    wait: [1, 2]
+
+  - action: detect_state
+    description: 检查评论区是否打开
+    ocr_keywords: [评论, 说点什么]
+    timeout: 5
+
+  - action: swipe
+    description: 下滑关闭评论区
+    direction: down
+    duration: 0.3
+    wait: [1, 2]
