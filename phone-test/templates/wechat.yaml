@@ -1,0 +1,70 @@
+# 微信自动化测试流程模板
+# 视觉识别：OpenCV 模板匹配 + PaddleOCR
+# 模板图片位于: templates/icons/微信/
+app: 微信
+name: 微信基础功能测试
+version: 2
+
+steps:
+  - action: tap_icon
+    description: 点击微信图标启动APP
+    template: 微信
+    threshold: 0.85
+    wait: 3
+
+  - action: detect_state
+    description: 检测微信首页
+    ocr_keywords: [微信, 通讯录, 发现, 我]
+    timeout: 10
+
+  - action: tap_icon
+    description: 点击通讯录tab
+    template: 通讯录tab
+    threshold: 0.80
+    wait: [1, 2]
+
+  - action: detect_state
+    description: 确认进入通讯录页面
+    ocr_keywords: [通讯录, 新的朋友]
+    timeout: 5
+
+  - action: tap_icon
+    description: 点击发现tab
+    template: 发现tab
+    threshold: 0.80
+    wait: [1, 2]
+
+  - action: detect_state
+    description: 确认进入发现页面
+    ocr_keywords: [朋友圈, 视频号]
+    timeout: 5
+
+  - action: tap_icon
+    description: 进入朋友圈
+    template: 朋友圈入口
+    threshold: 0.80
+    wait: [2, 3]
+
+  - action: detect_state
+    description: 检查朋友圈是否打开
+    ocr_keywords: [朋友圈]
+    timeout: 8
+
+  - action: swipe
+    description: 浏览朋友圈
+    direction: up
+    duration: 0.5
+    repeat: 3
+    wait: [2, 4]
+    target: "返回箭头或左上角返回按钮"
+    wait: [1, 2]
+
+  - action: tap_icon
+    description: 回到微信tab
+    target: "微信"
+    wait: [1, 2]
+
+  - action: detect_state
+    description: 确认回到聊天列表
+    expect: "微信聊天列表页面"
+    timeout: 5

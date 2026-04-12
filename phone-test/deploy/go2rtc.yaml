@@ -1,0 +1,11 @@
+# go2rtc 配置模板
+# 每个N1节点使用本地USB摄像头
+streams:
+  cam:
+    - ffmpeg:device=/dev/video0#video=h264#width=1280#height=720#fps=15
+
+api:
+  listen: ":1984"
+
+log:
+  level: info

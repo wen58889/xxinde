@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+__MACOSX/
+Thumbs.db
+
+# Arts/IDE settings
+.arts/
+
+# Database
+*.db
+*.db-journal
+
+# Logs
+*.log
+
+# Environment (keep .env.example, ignore actual .env with secrets)
+# backend/.env  # uncomment if .env contains secrets
+
+# Node.js
+node_modules/
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+
+# Test/temp files
+test_ocr.png
+test_ocr_cn.png
+template_wechat.jpg
+
+# PaddleOCR model cache
+.paddlex/
+
+# Coverage
+htmlcov/
+.coverage

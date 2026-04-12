@@ -1,0 +1,108 @@
+import { Box, IconButton, Typography, Collapse, TextField } from '@mui/material'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import DeleteIcon from '@mui/icons-material/Delete'
+import EditIcon from '@mui/icons-material/Edit'
+import { useState, useRef } from 'react'
+import { Rule } from '../../types/rule'
+import { useRuleStore } from '../../stores/ruleStore'
+import RuleParams from './RuleParams'
+import DetectArea from './DetectArea'
+import SubActionQueue from './SubActionQueue'
+import { colors } from '../../theme'
+
+interface Props {
+  rule: Rule
+  index: number
+}
+
+export default function RuleCard({ rule, index }: Props) {
+  const toggleExpand = useRuleStore((s) => s.toggleExpand)
+  const removeRule = useRuleStore((s) => s.removeRule)
+  const duplicateRule = useRuleStore((s) => s.duplicateRule)
+  const updateRule = useRuleStore((s) => s.updateRule)
+  const selectRule = useRuleStore((s) => s.selectRule)
+  const selectedRuleId = useRuleStore((s) => s.selectedRuleId)
+
+  const [editing, setEditing] = useState(false)
+  const [nameVal, setNameVal] = useState(rule.name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const isSelected = selectedRuleId === rule.id
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setNameVal(rule.name)
+    setEditing(true)
+    setTimeout(() => inputRef.current?.select(), 10)
+  }
+
+  const commitEdit = () => {
+    const trimmed = nameVal.trim()
+    if (trimmed) updateRule(rule.id, { name: trimmed })
+    setEditing(false)
+  }
+
+  return (
+    <Box
+      sx={{
+        bgcolor: colors.card,
+        borderRadius: 1,
+        border: isSelected ? `1px solid ${colors.highlight}` : '1px solid #333',
+        mb: 0.5,
+      }}
+      onClick={() => selectRule(rule.id)}
+    >
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', px: 1, py: 0.3 }}>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggleExpand(rule.id) }}>
+          {rule.expanded ? <ExpandLessIcon sx={{ fontSize: 16 }} /> : <ExpandMoreIcon sx={{ fontSize: 16 }} />}
+        </IconButton>
+        <Typography variant="caption" sx={{ fontWeight: 600, minWidth: 20 }}>{index + 1}.</Typography>
+
+        {editing ? (
+          <TextField
+            inputRef={inputRef}
+            size="small"
+            value={nameVal}
+            onChange={(e) => setNameVal(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false) }}
+            onClick={(e) => e.stopPropagation()}
+            sx={{ flex: 1, '& input': { py: 0.3, fontSize: 13 } }}
+            autoFocus
+          />
+        ) : (
+          <Typography
+            variant="body2"
+            sx={{ flex: 1, fontSize: 13, cursor: 'text' }}
+            onDoubleClick={startEdit}
+            title="双击修改名称"
+          >
+            {rule.name}
+          </Typography>
+        )}
+
+        <IconButton size="small" onClick={startEdit} sx={{ opacity: 0.4, '&:hover': { opacity: 1 } }}>
+          <EditIcon sx={{ fontSize: 12 }} />
+        </IconButton>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); duplicateRule(rule.id) }}>
+          <ContentCopyIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); removeRule(rule.id) }}>
+          <DeleteIcon sx={{ fontSize: 14, color: colors.danger }} />
+        </IconButton>
+      </Box>
+
+      {/* Body */}
+      <Collapse in={rule.expanded}>
+        <Box sx={{ px: 1, pb: 1 }}>
+          <RuleParams rule={rule} />
+          <DetectArea rule={rule} />
+          <SubActionQueue rule={rule} />
+        </Box>
+      </Collapse>
+    </Box>
+  )
+}
