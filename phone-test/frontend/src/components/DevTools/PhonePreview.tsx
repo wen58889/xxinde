@@ -23,6 +23,7 @@ export default function PhonePreview({ onCoordClick }: Props) {
   const setCurrentFrameBlob = useDeviceStore((s) => s.setCurrentFrameBlob)
   const armLinkEnabled = useDeviceStore((s) => s.armLinkEnabled)
   const setCoordinate = useRuleStore((s) => s.setCoordinate)
+  const selectedSubId = useRuleStore((s) => s.selectedSubId)
   const addLog = useLogStore((s) => s.addLog)
   const imgRef = useRef<HTMLImageElement>(null)
   const [imgSrc, setImgSrc] = useState('')
@@ -196,7 +197,7 @@ export default function PhonePreview({ onCoordClick }: Props) {
           onCoordClick(coords.x, coords.y)
         } else {
           setCoordinate(coords.x, coords.y)
-          addLog(`坐标已获取: (${coords.x}, ${coords.y})`, 'success')
+          addLog(`坐标已获取: (${coords.x}, ${coords.y})${selectedSubId ? ' → 子动作' : ''}`, 'success')
         }
         // 联动模式：点击时机械臂跟随移动
         if (armLinkEnabled && selectedDeviceId) {
@@ -216,7 +217,7 @@ export default function PhonePreview({ onCoordClick }: Props) {
       }
     }
     mouseDownCoords.current = null
-  }, [isCropping, cropStart, cropEnd, screenToPixel, onCoordClick, setCoordinate, addLog, armLinkEnabled, selectedDeviceId])
+  }, [isCropping, cropStart, cropEnd, screenToPixel, onCoordClick, setCoordinate, selectedSubId, addLog, armLinkEnabled, selectedDeviceId])
 
   const handleSaveCrop = async () => {
     if (!cropRegion || !saveName.trim()) return
