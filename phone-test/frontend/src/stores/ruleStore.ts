@@ -23,6 +23,9 @@ function createRule(name?: string): Rule {
     waitMin: 1, waitMax: 2,
     detectArea: [0, 0, 0, 0, 0, 0, 0, 0],
     ttsText: '',
+    templateName: '',
+    threshold: 0.85,
+    keyword: '',
     subActions: [],
   }
 }
@@ -40,6 +43,9 @@ function createSubAction(): SubAction {
     note: '',
     slideX: 0, slideY: 0,
     slideDuration: 0,
+    templateName: '',
+    threshold: 0.85,
+    keyword: '',
   }
 }
 

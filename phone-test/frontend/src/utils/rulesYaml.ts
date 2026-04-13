@@ -44,6 +44,15 @@ function subActionLines(sub: SubAction): string[] {
     } else if (sub.actionType === 'TTS') {
       lines.push(`  - action: tts`)
       lines.push(`    text: "${(sub.note || '').replace(/"/g, '\\"')}"`)
+    } else if (sub.actionType === '识图') {
+      lines.push(`  - action: tap_icon`)
+      lines.push(`    template: "${(sub.templateName || '').replace(/"/g, '\\"')}"`)
+      if (sub.threshold > 0 && sub.threshold !== 1) {
+        lines.push(`    threshold: ${sub.threshold}`)
+      }
+    } else if (sub.actionType === '识字') {
+      lines.push(`  - action: tap_text`)
+      lines.push(`    keyword: "${(sub.keyword || '').replace(/"/g, '\\"')}"`)
     }
   }
 
@@ -96,6 +105,15 @@ export function rulesToYaml(rules: Rule[]): string {
     } else if (rule.actionType === 'TTS') {
       lines.push(`  - action: tts`)
       lines.push(`    text: "${(rule.ttsText || '').replace(/"/g, '\\"')}"`)
+    } else if (rule.actionType === '识图') {
+      lines.push(`  - action: tap_icon`)
+      lines.push(`    template: "${(rule.templateName || '').replace(/"/g, '\\"')}"`)
+      if (rule.threshold > 0 && rule.threshold !== 1) {
+        lines.push(`    threshold: ${rule.threshold}`)
+      }
+    } else if (rule.actionType === '识字') {
+      lines.push(`  - action: tap_text`)
+      lines.push(`    keyword: "${(rule.keyword || '').replace(/"/g, '\\"')}"`)
     }
 
     // Wait between rule actions

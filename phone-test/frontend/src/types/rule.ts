@@ -1,4 +1,4 @@
-export type ActionType = '点击' | '滑屏' | 'TTS'
+export type ActionType = '点击' | '滑屏' | 'TTS' | '识图' | '识字'
 export type PositionMode = '中心' | '相对' | '坐标'
 
 export interface SubAction {
@@ -17,6 +17,11 @@ export interface SubAction {
   slideX: number
   slideY: number
   slideDuration: number
+  // 识图专用
+  templateName: string
+  threshold: number
+  // 识字专用
+  keyword: string
 }
 
 export interface Rule {
@@ -39,6 +44,11 @@ export interface Rule {
   waitMax: number
   detectArea: [number, number, number, number, number, number, number, number]
   ttsText: string
+  // 识图专用
+  templateName: string
+  threshold: number
+  // 识字专用
+  keyword: string
   subActions: SubAction[]
 }
 

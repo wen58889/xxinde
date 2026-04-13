@@ -105,6 +105,31 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         </>
       )}
 
+      {/* 识图专用 */}
+      {sub.actionType === '识图' && (
+        <>
+          <TextField
+            size="small"
+            label="模板名称"
+            value={sub.templateName || ''}
+            onChange={(e) => u({ templateName: e.target.value })}
+            sx={{ flex: 1, minWidth: 80, '& input': { py: 0.5, fontSize: 11 }, '& label': { fontSize: 10 } }}
+          />
+          {numField('阈值', sub.threshold, 'threshold', 58)}
+        </>
+      )}
+
+      {/* 识字专用 */}
+      {sub.actionType === '识字' && (
+        <TextField
+          size="small"
+          label="查找文字"
+          value={sub.keyword || ''}
+          onChange={(e) => u({ keyword: e.target.value })}
+          sx={{ flex: 1, minWidth: 80, '& input': { py: 0.5, fontSize: 11 }, '& label': { fontSize: 10 } }}
+        />
+      )}
+
       {/* TTS 专用 */}
       {sub.actionType === 'TTS' && (
         <TextField

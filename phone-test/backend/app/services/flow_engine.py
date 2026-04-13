@@ -78,6 +78,11 @@ class FlowEngine:
             await self._tap_icon(template_name, threshold)
         elif action == "tap":
             await self._tap_percent(step.get("screen_percent", [50, 50]))
+        elif action == "tap_text":
+            keyword = step.get("keyword", step.get("text", ""))
+            if not keyword:
+                raise RuntimeError("tap_text: 'keyword' field is required")
+            await self._tap_text(keyword)
         elif action == "detect_state":
             templates = step.get("templates", [])
             ocr_keywords = step.get("ocr_keywords", [])
@@ -139,6 +144,19 @@ class FlowEngine:
         px, py = coords
         mx, my = self.coord.pixel_to_mech(px, py)
         await self.motion.tap(mx, my)
+
+    async def _tap_text(self, keyword: str):
+        """Find text on screen via OCR and tap it."""
+        screenshot = await capture_screenshot(self.device_ip)
+        text_coords = await vision_manager.read_text(screenshot)
+        for t in text_coords:
+            if keyword in t.text:
+                mx, my = self.coord.pixel_to_mech(t.x, t.y)
+                logger.info("tap_text: '%s' found at (%.0f, %.0f) -> mech(%.2f, %.2f)",
+                            keyword, t.x, t.y, mx, my)
+                await self.motion.tap(mx, my)
+                return
+        raise RuntimeError(f"Text '{keyword}' not found on screen")
 
     async def _tap_percent(self, percent: list):
         # Camera resolution: 720 (width) x 1280 (height)
