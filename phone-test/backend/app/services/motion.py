@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 # Limits from spec
 X_MIN, X_MAX = 0.0, 150.0
 Y_MIN, Y_MAX = 0.0, 150.0
-Z_MIN, Z_MAX = 0.0, 50.0
-Z_SAFE = 30.0
+Z_MIN, Z_MAX = -0.2, 2.0
+Z_SAFE = 1.5       # Safe Z height for XY travel (must be < Z_MAX)
 XY_MAX_FEED = 9000  # F9000 = 150mm/s
 Z_MAX_FEED = 4800   # F4800 = 80mm/s
 TAP_Z = 0.0         # Touch height

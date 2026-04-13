@@ -1,5 +1,5 @@
 export type ActionType = '点击' | '滑屏' | 'TTS'
-export type PositionMode = '中心' | '坐标'
+export type PositionMode = '中心' | '相对' | '坐标'
 
 export interface SubAction {
   id: string
@@ -9,10 +9,14 @@ export interface SubAction {
   radius: number
   count: number
   longPress: number
-  loopCount: number
+  probability: number
   waitMin: number
   waitMax: number
   note: string
+  // 滑屏专用
+  slideX: number
+  slideY: number
+  slideDuration: number
 }
 
 export interface Rule {
@@ -26,12 +30,15 @@ export interface Rule {
   radius: number
   count: number
   longPress: number
+  timer: number
+  probability: number
   slideDuration: number
   slideX: number
   slideY: number
   waitMin: number
   waitMax: number
   detectArea: [number, number, number, number, number, number, number, number]
+  ttsText: string
   subActions: SubAction[]
 }
 

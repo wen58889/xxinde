@@ -62,7 +62,7 @@ class FlowEngine:
                 logger.error("[%d] %s", self.device_id, error_msg)
                 # Safety: raise Z on failure
                 try:
-                    await self.motion.client.send_gcode("G1 Z30 F3000")
+                    await self.motion.client.send_gcode("G1 Z1.5 F3000")
                 except Exception:
                     pass
 
@@ -97,10 +97,19 @@ class FlowEngine:
             await self._swipe(action, step)
         elif action == "long_press":
             px, py = step.get("screen_percent", [50, 50])
-            mx, my = self.coord.pixel_to_mech(px * 12.8, py * 7.2)
+            # Camera resolution: 720 (width) x 1280 (height)
+            mx, my = self.coord.pixel_to_mech(px / 100 * 720, py / 100 * 1280)
             await self.motion.long_press(mx, my, step.get("seconds", 1))
         elif action == "wait":
             await asyncio.sleep(step.get("seconds", 1))
+        elif action == "tts":
+            text = step.get("text", "")
+            if text:
+                logger.info("[%d] TTS: %s", self.device_id, text)
+                # TTS is informational only for now; log the text
+                await ws_manager.broadcast("tts", {
+                    "device_id": self.device_id, "text": text,
+                })
         else:
             logger.warning("Unknown action: %s", action)
 
@@ -132,8 +141,9 @@ class FlowEngine:
         await self.motion.tap(mx, my)
 
     async def _tap_percent(self, percent: list):
-        px = percent[0] / 100 * 1280
-        py = percent[1] / 100 * 720
+        # Camera resolution: 720 (width) x 1280 (height)
+        px = percent[0] / 100 * 720
+        py = percent[1] / 100 * 1280
         mx, my = self.coord.pixel_to_mech(px, py)
         await self.motion.tap(mx, my)
 
@@ -183,10 +193,11 @@ class FlowEngine:
         elif action == "swipe_right" and "start_percent" not in step:
             start, end = [20, 50], [80, 50]
 
-        x1 = start[0] / 100 * 1280
-        y1 = start[1] / 100 * 720
-        x2 = end[0] / 100 * 1280
-        y2 = end[1] / 100 * 720
+        # Camera resolution: 720 (width) x 1280 (height)
+        x1 = start[0] / 100 * 720
+        y1 = start[1] / 100 * 1280
+        x2 = end[0] / 100 * 720
+        y2 = end[1] / 100 * 1280
 
         mx1, my1 = self.coord.pixel_to_mech(x1, y1)
         mx2, my2 = self.coord.pixel_to_mech(x2, y2)
