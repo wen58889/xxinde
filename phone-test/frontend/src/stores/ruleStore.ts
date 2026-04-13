@@ -46,6 +46,7 @@ function createSubAction(): SubAction {
 interface RuleStore {
   rules: Rule[]
   selectedRuleId: string | null
+  selectedSubId: string | null
 
   addRule: (afterId?: string) => void
   removeRule: (id: string) => void
@@ -53,6 +54,7 @@ interface RuleStore {
   updateRule: (id: string, partial: Partial<Rule>) => void
   toggleExpand: (id: string) => void
   selectRule: (id: string | null) => void
+  selectSub: (subId: string | null) => void
 
   addSubAction: (ruleId: string) => void
   removeSubAction: (ruleId: string, subId: string) => void
@@ -67,6 +69,7 @@ interface RuleStore {
 export const useRuleStore = create<RuleStore>((set, get) => ({
   rules: [createRule()],
   selectedRuleId: null,
+  selectedSubId: null,
 
   addRule: (afterId) =>
     set((s) => {
@@ -114,7 +117,9 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       ),
     })),
 
-  selectRule: (id) => set({ selectedRuleId: id }),
+  selectRule: (id) => set({ selectedRuleId: id, selectedSubId: null }),
+
+  selectSub: (subId) => set({ selectedSubId: subId }),
 
   addSubAction: (ruleId) =>
     set((s) => ({
@@ -160,16 +165,33 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
     })),
 
   setCoordinate: (x, y) => {
-    const { selectedRuleId, rules } = get()
+    const { selectedRuleId, selectedSubId, rules } = get()
     if (!selectedRuleId) return
-    set({
-      rules: rules.map((r) =>
-        r.id === selectedRuleId ? { ...r, x, y } : r
-      ),
-    })
+
+    // If a sub-action is selected, fill its X/Y instead
+    if (selectedSubId) {
+      set({
+        rules: rules.map((r) =>
+          r.id === selectedRuleId
+            ? {
+                ...r,
+                subActions: r.subActions.map((sa) =>
+                  sa.id === selectedSubId ? { ...sa, x, y } : sa
+                ),
+              }
+            : r
+        ),
+      })
+    } else {
+      set({
+        rules: rules.map((r) =>
+          r.id === selectedRuleId ? { ...r, x, y } : r
+        ),
+      })
+    }
   },
 
-  clearAll: () => set({ rules: [createRule()], selectedRuleId: null }),
+  clearAll: () => set({ rules: [createRule()], selectedRuleId: null, selectedSubId: null }),
 
   loadRules: (rules) => set({ rules }),
 }))
