@@ -132,6 +132,8 @@ class CoordinateMapper:
         device_id: int,
         pixel_points: list,
         mech_points: list,
+        offset_x: float = 0.0,
+        offset_y: float = 0.0,
     ) -> CalibrationData:
         result = await db.execute(
             select(CalibrationData).where(CalibrationData.device_id == device_id)
@@ -140,11 +142,15 @@ class CoordinateMapper:
         if cal:
             cal.pixel_points = pixel_points
             cal.mech_points = mech_points
+            cal.offset_x = offset_x
+            cal.offset_y = offset_y
         else:
             cal = CalibrationData(
                 device_id=device_id,
                 pixel_points=pixel_points,
                 mech_points=mech_points,
+                offset_x=offset_x,
+                offset_y=offset_y,
             )
             db.add(cal)
         await db.commit()

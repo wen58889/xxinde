@@ -81,6 +81,13 @@ class TemplateOut(BaseModel):
 class CalibrationRequest(BaseModel):
     pixel_points: List[List[float]]
     mech_points: List[List[float]]
+    offset_x: float = 0.0
+    offset_y: float = 0.0
+
+
+class OffsetRequest(BaseModel):
+    offset_x: float
+    offset_y: float
 
 
 class CalibrationOut(BaseModel):
