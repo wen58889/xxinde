@@ -50,7 +50,7 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
     <Box
       ref={setNodeRef}
       style={style}
-      onClick={() => selectSub(sub.id)}
+      onClick={(e) => { e.stopPropagation(); selectSub(sub.id) }}
       sx={{
         display: 'flex',
         gap: 0.5,

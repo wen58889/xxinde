@@ -53,7 +53,7 @@ export default function SubActionQueue({ rule }: Props) {
       <Button
         size="small"
         startIcon={<AddIcon />}
-        onClick={() => addSubAction(rule.id)}
+        onClick={(e) => { e.stopPropagation(); addSubAction(rule.id) }}
         sx={{ mt: 0.5, fontSize: 11, textTransform: 'none' }}
       >
         添加动作

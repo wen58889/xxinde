@@ -117,7 +117,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       ),
     })),
 
-  selectRule: (id) => set({ selectedRuleId: id, selectedSubId: null }),
+  selectRule: (id) => set({ selectedRuleId: id }),
 
   selectSub: (subId) => set({ selectedSubId: subId }),
 
@@ -173,27 +173,33 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
     const { selectedRuleId, selectedSubId, rules } = get()
     if (!selectedRuleId) return
 
-    // If a sub-action is selected, fill its X/Y instead
+    // If a sub-action is selected and belongs to the current rule, fill its X/Y
     if (selectedSubId) {
-      set({
-        rules: rules.map((r) =>
-          r.id === selectedRuleId
-            ? {
-                ...r,
-                subActions: r.subActions.map((sa) =>
-                  sa.id === selectedSubId ? { ...sa, x, y } : sa
-                ),
-              }
-            : r
-        ),
-      })
-    } else {
-      set({
-        rules: rules.map((r) =>
-          r.id === selectedRuleId ? { ...r, x, y } : r
-        ),
-      })
+      const rule = rules.find((r) => r.id === selectedRuleId)
+      const subExists = rule?.subActions.some((sa) => sa.id === selectedSubId)
+      if (subExists) {
+        set({
+          rules: rules.map((r) =>
+            r.id === selectedRuleId
+              ? {
+                  ...r,
+                  subActions: r.subActions.map((sa) =>
+                    sa.id === selectedSubId ? { ...sa, x, y } : sa
+                  ),
+                }
+              : r
+          ),
+        })
+        return
+      }
     }
+
+    // Default: fill rule's X/Y
+    set({
+      rules: rules.map((r) =>
+        r.id === selectedRuleId ? { ...r, x, y } : r
+      ),
+    })
   },
 
   clearAll: () => set({ rules: [createRule()], selectedRuleId: null, selectedSubId: null }),
