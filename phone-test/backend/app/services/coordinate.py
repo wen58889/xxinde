@@ -27,17 +27,58 @@ class CoordinateMapper:
         self.offset_y = cal.offset_y
         px = cal.pixel_points   # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
         mx = cal.mech_points
-        if len(px) >= 2 and len(mx) >= 2:
-            # Simple linear: use top-left and bottom-right
-            self._px_tl = px[0]
-            self._px_br = px[2] if len(px) > 2 else px[1]
-            self._mx_tl = mx[0]
-            self._mx_br = mx[2] if len(mx) > 2 else mx[1]
+        # Points layout: 0=TL, 1=TR, 2=BL, 3=BR
+        # We need at least 2 points for any mapping.
+        # With 4 points, use bilinear interpolation (handles axis inversion).
+        if len(px) >= 4 and len(mx) >= 4:
+            self._px = px  # [TL, TR, BL, BR]
+            self._mx = mx
             self._calibrated = True
+            self._bilinear = True
+        elif len(px) >= 2 and len(mx) >= 2:
+            # Fallback: diagonal linear (2-3 points)
+            self._px_tl = px[0]
+            self._px_br = px[-1]
+            self._mx_tl = mx[0]
+            self._mx_br = mx[-1]
+            self._calibrated = True
+            self._bilinear = False
 
     def pixel_to_mech(self, px: float, py: float) -> tuple[float, float]:
-        if self._calibrated and hasattr(self, "_px_tl"):
-            # Linear interpolation using calibration points
+        if self._calibrated and getattr(self, "_bilinear", False):
+            # 4-point bilinear interpolation
+            # Handles axis inversion (e.g. pixel X and mech X in opposite directions)
+            #
+            # Layout: 0=TL, 1=TR, 2=BL, 3=BR
+            #   px[0]=(x_tl,y_tl)  px[1]=(x_tr,y_tr)
+            #   px[2]=(x_bl,y_bl)  px[3]=(x_br,y_br)
+            #
+            # Normalize pixel coords to [0,1] range using TL-BR diagonal,
+            # then bilinear blend the 4 mech corners.
+            px_tl, px_tr, px_bl, px_br = self._px
+            mx_tl, mx_tr, mx_bl, mx_br = self._mx
+
+            # Use TL→BR diagonal for normalization
+            diag_px_x = px_br[0] - px_tl[0]
+            diag_px_y = px_br[1] - px_tl[1]
+            if diag_px_x == 0 or diag_px_y == 0:
+                raise ValueError("Invalid calibration: zero pixel span")
+
+            # Normalized coords: u in X direction, v in Y direction
+            u = (px - px_tl[0]) / diag_px_x
+            v = (py - px_tl[1]) / diag_px_y
+
+            # Bilinear interpolation of mech coordinates
+            # At (u,v): blend = (1-u)(1-v)*TL + u*(1-v)*TR + (1-u)*v*BL + u*v*BR
+            w00 = (1 - u) * (1 - v)  # TL weight
+            w10 = u * (1 - v)         # TR weight
+            w01 = (1 - u) * v         # BL weight
+            w11 = u * v               # BR weight
+
+            mx = w00 * mx_tl[0] + w10 * mx_tr[0] + w01 * mx_bl[0] + w11 * mx_br[0] + self.offset_x
+            my = w00 * mx_tl[1] + w10 * mx_tr[1] + w01 * mx_bl[1] + w11 * mx_br[1] + self.offset_y
+        elif self._calibrated and hasattr(self, "_px_tl"):
+            # 2-3 point diagonal linear interpolation
             px_w = self._px_br[0] - self._px_tl[0]
             px_h = self._px_br[1] - self._px_tl[1]
             mx_w = self._mx_br[0] - self._mx_tl[0]
