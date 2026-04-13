@@ -19,6 +19,9 @@ interface Props {
 export default function SubActionRow({ ruleId, sub, index }: Props) {
   const updateSubAction = useRuleStore((s) => s.updateSubAction)
   const removeSubAction = useRuleStore((s) => s.removeSubAction)
+  const selectSub = useRuleStore((s) => s.selectSub)
+  const selectedSubId = useRuleStore((s) => s.selectedSubId)
+  const isSelected = selectedSubId === sub.id
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: sub.id,
@@ -47,6 +50,7 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
     <Box
       ref={setNodeRef}
       style={style}
+      onClick={() => selectSub(sub.id)}
       sx={{
         display: 'flex',
         gap: 0.5,
@@ -54,8 +58,10 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         flexWrap: 'wrap',
         py: 0.3,
         px: 0.5,
-        bgcolor: '#1a1a2e',
+        bgcolor: isSelected ? '#1a2a4e' : '#1a1a2e',
         borderRadius: 0.5,
+        border: isSelected ? '1px solid #448aff' : '1px solid transparent',
+        cursor: 'pointer',
       }}
     >
       <IconButton size="small" {...attributes} {...listeners} sx={{ cursor: 'grab', p: 0 }}>
