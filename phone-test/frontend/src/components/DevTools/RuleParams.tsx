@@ -3,7 +3,7 @@ import { Rule, ActionType, PositionMode } from '../../types/rule'
 import { useRuleStore } from '../../stores/ruleStore'
 
 const actionTypes: ActionType[] = ['点击', '滑屏', 'TTS']
-const positionModes: PositionMode[] = ['中心', '坐标']
+const positionModes: PositionMode[] = ['中心', '相对', '坐标']
 
 interface Props {
   rule: Rule
@@ -26,6 +26,7 @@ export default function RuleParams({ rule }: Props) {
 
   return (
     <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap', py: 0.5 }}>
+      {/* 动作类型 */}
       <Select
         size="small"
         value={rule.actionType}
@@ -35,6 +36,7 @@ export default function RuleParams({ rule }: Props) {
         {actionTypes.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
       </Select>
 
+      {/* 坐标模式 */}
       <ToggleButtonGroup
         size="small"
         exclusive
@@ -49,21 +51,47 @@ export default function RuleParams({ rule }: Props) {
         ))}
       </ToggleButtonGroup>
 
+      {/* 坐标 */}
       {numField('X', rule.x, 'x')}
       {numField('Y', rule.y, 'y')}
-      {numField('半径', rule.radius, 'radius')}
-      {numField('次数', rule.count, 'count', 48)}
-      {numField('长按', rule.longPress, 'longPress')}
 
+      {/* 随机偏移 */}
+      {numField('随机', rule.radius, 'radius', 55)}
+
+      {/* 次数 */}
+      {numField('次数', rule.count, 'count', 48)}
+
+      {/* 长按/秒 */}
+      {numField('长按/秒', rule.longPress, 'longPress', 58)}
+
+      {/* 滑屏专用参数 */}
       {rule.actionType === '滑屏' && (
         <>
-          {numField('滑时', rule.slideDuration, 'slideDuration')}
           <Typography variant="caption" sx={{ color: '#888' }}>→</Typography>
           {numField('滑X', rule.slideX, 'slideX')}
           {numField('滑Y', rule.slideY, 'slideY')}
+          {numField('滑时', rule.slideDuration, 'slideDuration')}
         </>
       )}
 
+      {/* TTS 专用 */}
+      {rule.actionType === 'TTS' && (
+        <TextField
+          size="small"
+          label="语音文本"
+          value={rule.ttsText || ''}
+          onChange={(e) => u({ ttsText: e.target.value })}
+          sx={{ flex: 1, minWidth: 100, '& input': { py: 0.5, fontSize: 12 }, '& label': { fontSize: 11 } }}
+        />
+      )}
+
+      {/* 定时/秒 */}
+      {numField('定时/秒', rule.timer, 'timer', 58)}
+
+      {/* 概率 */}
+      {numField('概率', rule.probability, 'probability', 48)}
+
+      {/* 等待/秒 min - max */}
       {numField('等待min', rule.waitMin, 'waitMin', 62)}
       <Typography variant="caption" sx={{ color: '#888' }}>-</Typography>
       {numField('max', rule.waitMax, 'waitMax', 50)}

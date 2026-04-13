@@ -75,22 +75,57 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         {actionTypes.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
       </Select>
 
+      {/* 坐标 */}
       {numField('X', sub.x, 'x')}
       {numField('Y', sub.y, 'y')}
-      {numField('半径', sub.radius, 'radius')}
+
+      {/* 随机偏移 */}
+      {numField('随机', sub.radius, 'radius')}
+
+      {/* 次数 */}
       {numField('次数', sub.count, 'count', 45)}
-      {numField('长按', sub.longPress, 'longPress')}
-      {numField('循环', sub.loopCount, 'loopCount', 48)}
+
+      {/* 长按/秒 */}
+      {numField('长按/秒', sub.longPress, 'longPress', 55)}
+
+      {/* 滑屏专用 */}
+      {sub.actionType === '滑屏' && (
+        <>
+          <Typography variant="caption" sx={{ color: '#888' }}>→</Typography>
+          {numField('滑X', sub.slideX, 'slideX')}
+          {numField('滑Y', sub.slideY, 'slideY')}
+          {numField('滑时', sub.slideDuration, 'slideDuration')}
+        </>
+      )}
+
+      {/* TTS 专用 */}
+      {sub.actionType === 'TTS' && (
+        <TextField
+          size="small"
+          label="语音文本"
+          value={sub.note || ''}
+          onChange={(e) => u({ note: e.target.value })}
+          sx={{ flex: 1, minWidth: 80, '& input': { py: 0.5, fontSize: 11 }, '& label': { fontSize: 10 } }}
+        />
+      )}
+
+      {/* 概率 */}
+      {numField('概率', sub.probability, 'probability', 45)}
+
+      {/* 等待/秒 min - max */}
       {numField('等min', sub.waitMin, 'waitMin', 52)}
       {numField('max', sub.waitMax, 'waitMax', 45)}
 
-      <TextField
-        size="small"
-        label="备注"
-        value={sub.note}
-        onChange={(e) => u({ note: e.target.value })}
-        sx={{ width: 80, '& input': { py: 0.5, fontSize: 11 }, '& label': { fontSize: 10 } }}
-      />
+      {/* 备注 (非TTS时显示) */}
+      {sub.actionType !== 'TTS' && (
+        <TextField
+          size="small"
+          label="备注"
+          value={sub.note}
+          onChange={(e) => u({ note: e.target.value })}
+          sx={{ width: 80, '& input': { py: 0.5, fontSize: 11 }, '& label': { fontSize: 10 } }}
+        />
+      )}
 
       <IconButton size="small" onClick={() => removeSubAction(ruleId, sub.id)} sx={{ p: 0 }}>
         <CloseIcon sx={{ fontSize: 14, color: '#888' }} />

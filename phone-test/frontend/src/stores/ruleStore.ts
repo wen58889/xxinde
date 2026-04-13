@@ -16,10 +16,13 @@ function createRule(name?: string): Rule {
     radius: 0.005,
     count: 1,
     longPress: 0,
+    timer: 0,
+    probability: 1,
     slideDuration: 0,
     slideX: 0, slideY: 0,
     waitMin: 1, waitMax: 2,
     detectArea: [0, 0, 0, 0, 0, 0, 0, 0],
+    ttsText: '',
     subActions: [],
   }
 }
@@ -32,9 +35,11 @@ function createSubAction(): SubAction {
     radius: 0.005,
     count: 1,
     longPress: 0,
-    loopCount: 1,
+    probability: 1,
     waitMin: 1, waitMax: 2,
     note: '',
+    slideX: 0, slideY: 0,
+    slideDuration: 0,
   }
 }
 
