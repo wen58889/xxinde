@@ -1,9 +1,11 @@
-import { Box, IconButton, Typography, Collapse, TextField } from '@mui/material'
+import { Box, IconButton, Typography, Collapse, TextField, Tooltip } from '@mui/material'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
+import ImageIcon from '@mui/icons-material/Image'
+import TextFieldsIcon from '@mui/icons-material/TextFields'
 import { useState, useRef } from 'react'
 import { Rule } from '../../types/rule'
 import { useRuleStore } from '../../stores/ruleStore'
@@ -24,6 +26,9 @@ export default function RuleCard({ rule, index }: Props) {
   const updateRule = useRuleStore((s) => s.updateRule)
   const selectRule = useRuleStore((s) => s.selectRule)
   const selectedRuleId = useRuleStore((s) => s.selectedRuleId)
+  const addSubAction = useRuleStore((s) => s.addSubAction)
+  const updateSubAction = useRuleStore((s) => s.updateSubAction)
+  const rules = useRuleStore((s) => s.rules)
 
   const [editing, setEditing] = useState(false)
   const [nameVal, setNameVal] = useState(rule.name)
@@ -42,6 +47,36 @@ export default function RuleCard({ rule, index }: Props) {
     const trimmed = nameVal.trim()
     if (trimmed) updateRule(rule.id, { name: trimmed })
     setEditing(false)
+  }
+
+  const insertIcon = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    addSubAction(rule.id)
+    // Get the newly added sub-action and set its type to 识图
+    const currentRule = rules.find((r) => r.id === rule.id)
+    if (currentRule) {
+      const newSub = currentRule.subActions[currentRule.subActions.length - 1]
+      // Need to wait for state update, use setTimeout
+      setTimeout(() => {
+        const updatedRule = useRuleStore.getState().rules.find((r) => r.id === rule.id)
+        if (updatedRule) {
+          const lastSub = updatedRule.subActions[updatedRule.subActions.length - 1]
+          if (lastSub) updateSubAction(rule.id, lastSub.id, { actionType: '识图' })
+        }
+      }, 0)
+    }
+  }
+
+  const insertText = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    addSubAction(rule.id)
+    setTimeout(() => {
+      const updatedRule = useRuleStore.getState().rules.find((r) => r.id === rule.id)
+      if (updatedRule) {
+        const lastSub = updatedRule.subActions[updatedRule.subActions.length - 1]
+        if (lastSub) updateSubAction(rule.id, lastSub.id, { actionType: '识字' })
+      }
+    }, 0)
   }
 
   return (
@@ -87,6 +122,16 @@ export default function RuleCard({ rule, index }: Props) {
         <IconButton size="small" onClick={startEdit} sx={{ opacity: 0.4, '&:hover': { opacity: 1 } }}>
           <EditIcon sx={{ fontSize: 12 }} />
         </IconButton>
+        <Tooltip title="插入图片" arrow>
+          <IconButton size="small" onClick={insertIcon} sx={{ opacity: 0.6, '&:hover': { opacity: 1, color: '#4fc3f7' } }}>
+            <ImageIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="插入文字" arrow>
+          <IconButton size="small" onClick={insertText} sx={{ opacity: 0.6, '&:hover': { opacity: 1, color: '#81c784' } }}>
+            <TextFieldsIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
         <IconButton size="small" onClick={(e) => { e.stopPropagation(); duplicateRule(rule.id) }}>
           <ContentCopyIcon sx={{ fontSize: 14 }} />
         </IconButton>
