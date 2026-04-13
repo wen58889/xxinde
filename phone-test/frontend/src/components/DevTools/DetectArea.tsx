@@ -31,7 +31,8 @@ export default function DetectArea({ rule }: Props) {
           type="number"
           value={da[i]}
           onChange={(e) => setPoint(i, Number(e.target.value))}
-          sx={{ width: 52, '& input': { py: 0.5, fontSize: 11 }, '& label': { fontSize: 10 } }}
+          sx={{ width: 60, '& input': { py: 0.5, fontSize: 11 }, '& label': { fontSize: 10 } }}
+          inputProps={{ sx: { minWidth: 24 } }}
         />
       ))}
       <Button size="small" onClick={clear} sx={{ minWidth: 'auto', px: 1, fontSize: 11 }}>

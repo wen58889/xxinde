@@ -35,7 +35,7 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
 
   const u = (p: Partial<SubAction>) => updateSubAction(ruleId, sub.id, p)
 
-  const numField = (label: string, value: number, key: keyof SubAction, width = 52) => (
+  const numField = (label: string, value: number, key: keyof SubAction, width = 62) => (
     <TextField
       size="small"
       label={label}
@@ -43,6 +43,7 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
       value={value}
       onChange={(e) => u({ [key]: Number(e.target.value) } as Partial<SubAction>)}
       sx={{ width, '& input': { py: 0.5, fontSize: 11 }, '& label': { fontSize: 10 } }}
+      inputProps={{ sx: { minWidth: 24 } }}
     />
   )
 
@@ -81,26 +82,26 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         {actionTypes.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
       </Select>
 
-      {/* 坐标 */}
-      {numField('X', sub.x, 'x')}
-      {numField('Y', sub.y, 'y')}
+      {/* 坐标 - 需要更宽以显示0~1280的值 */}
+      {numField('X', sub.x, 'x', 68)}
+      {numField('Y', sub.y, 'y', 68)}
 
       {/* 随机偏移 */}
-      {numField('随机', sub.radius, 'radius')}
+      {numField('随机', sub.radius, 'radius', 58)}
 
       {/* 次数 */}
-      {numField('次数', sub.count, 'count', 45)}
+      {numField('次数', sub.count, 'count', 52)}
 
       {/* 长按/秒 */}
-      {numField('长按/秒', sub.longPress, 'longPress', 55)}
+      {numField('长按/秒', sub.longPress, 'longPress', 60)}
 
       {/* 滑屏专用 */}
       {sub.actionType === '滑屏' && (
         <>
           <Typography variant="caption" sx={{ color: '#888' }}>→</Typography>
-          {numField('滑X', sub.slideX, 'slideX')}
-          {numField('滑Y', sub.slideY, 'slideY')}
-          {numField('滑时', sub.slideDuration, 'slideDuration')}
+          {numField('滑X', sub.slideX, 'slideX', 68)}
+          {numField('滑Y', sub.slideY, 'slideY', 68)}
+          {numField('滑时', sub.slideDuration, 'slideDuration', 58)}
         </>
       )}
 
@@ -116,11 +117,11 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
       )}
 
       {/* 概率 */}
-      {numField('概率', sub.probability, 'probability', 45)}
+      {numField('概率', sub.probability, 'probability', 52)}
 
       {/* 等待/秒 min - max */}
-      {numField('等min', sub.waitMin, 'waitMin', 52)}
-      {numField('max', sub.waitMax, 'waitMax', 45)}
+      {numField('等min', sub.waitMin, 'waitMin', 58)}
+      {numField('max', sub.waitMax, 'waitMax', 48)}
 
       {/* 备注 (非TTS时显示) */}
       {sub.actionType !== 'TTS' && (
@@ -133,7 +134,7 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         />
       )}
 
-      <IconButton size="small" onClick={() => removeSubAction(ruleId, sub.id)} sx={{ p: 0 }}>
+      <IconButton size="small" onClick={(e) => { e.stopPropagation(); removeSubAction(ruleId, sub.id) }} sx={{ p: 0 }}>
         <CloseIcon sx={{ fontSize: 14, color: '#888' }} />
       </IconButton>
     </Box>

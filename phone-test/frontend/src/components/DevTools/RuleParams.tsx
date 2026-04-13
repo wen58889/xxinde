@@ -13,7 +13,7 @@ export default function RuleParams({ rule }: Props) {
   const updateRule = useRuleStore((s) => s.updateRule)
   const u = (p: Partial<Rule>) => updateRule(rule.id, p)
 
-  const numField = (label: string, value: number, key: keyof Rule, width = 55) => (
+  const numField = (label: string, value: number, key: keyof Rule, width = 68) => (
     <TextField
       size="small"
       label={label}
@@ -21,6 +21,7 @@ export default function RuleParams({ rule }: Props) {
       value={value}
       onChange={(e) => u({ [key]: Number(e.target.value) } as Partial<Rule>)}
       sx={{ width, '& input': { py: 0.5, fontSize: 12 }, '& label': { fontSize: 11 } }}
+      inputProps={{ sx: { minWidth: 28 } }}
     />
   )
 
@@ -51,26 +52,26 @@ export default function RuleParams({ rule }: Props) {
         ))}
       </ToggleButtonGroup>
 
-      {/* 坐标 */}
-      {numField('X', rule.x, 'x')}
-      {numField('Y', rule.y, 'y')}
+      {/* 坐标 - 需要更宽以显示0~1280的值 */}
+      {numField('X', rule.x, 'x', 72)}
+      {numField('Y', rule.y, 'y', 72)}
 
       {/* 随机偏移 */}
-      {numField('随机', rule.radius, 'radius', 55)}
+      {numField('随机', rule.radius, 'radius', 62)}
 
       {/* 次数 */}
-      {numField('次数', rule.count, 'count', 48)}
+      {numField('次数', rule.count, 'count', 55)}
 
       {/* 长按/秒 */}
-      {numField('长按/秒', rule.longPress, 'longPress', 58)}
+      {numField('长按/秒', rule.longPress, 'longPress', 65)}
 
       {/* 滑屏专用参数 */}
       {rule.actionType === '滑屏' && (
         <>
           <Typography variant="caption" sx={{ color: '#888' }}>→</Typography>
-          {numField('滑X', rule.slideX, 'slideX')}
-          {numField('滑Y', rule.slideY, 'slideY')}
-          {numField('滑时', rule.slideDuration, 'slideDuration')}
+          {numField('滑X', rule.slideX, 'slideX', 72)}
+          {numField('滑Y', rule.slideY, 'slideY', 72)}
+          {numField('滑时', rule.slideDuration, 'slideDuration', 62)}
         </>
       )}
 
@@ -86,15 +87,15 @@ export default function RuleParams({ rule }: Props) {
       )}
 
       {/* 定时/秒 */}
-      {numField('定时/秒', rule.timer, 'timer', 58)}
+      {numField('定时/秒', rule.timer, 'timer', 65)}
 
       {/* 概率 */}
-      {numField('概率', rule.probability, 'probability', 48)}
+      {numField('概率', rule.probability, 'probability', 55)}
 
       {/* 等待/秒 min - max */}
-      {numField('等待min', rule.waitMin, 'waitMin', 62)}
+      {numField('等待min', rule.waitMin, 'waitMin', 68)}
       <Typography variant="caption" sx={{ color: '#888' }}>-</Typography>
-      {numField('max', rule.waitMax, 'waitMax', 50)}
+      {numField('max', rule.waitMax, 'waitMax', 55)}
     </Box>
   )
 }
