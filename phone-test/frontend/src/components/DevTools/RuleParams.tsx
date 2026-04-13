@@ -75,6 +75,31 @@ export default function RuleParams({ rule }: Props) {
         </>
       )}
 
+      {/* 识图专用 */}
+      {rule.actionType === '识图' && (
+        <>
+          <TextField
+            size="small"
+            label="模板名称"
+            value={rule.templateName || ''}
+            onChange={(e) => u({ templateName: e.target.value })}
+            sx={{ flex: 1, minWidth: 100, '& input': { py: 0.5, fontSize: 12 }, '& label': { fontSize: 11 } }}
+          />
+          {numField('阈值', rule.threshold, 'threshold', 62)}
+        </>
+      )}
+
+      {/* 识字专用 */}
+      {rule.actionType === '识字' && (
+        <TextField
+          size="small"
+          label="查找文字"
+          value={rule.keyword || ''}
+          onChange={(e) => u({ keyword: e.target.value })}
+          sx={{ flex: 1, minWidth: 100, '& input': { py: 0.5, fontSize: 12 }, '& label': { fontSize: 11 } }}
+        />
+      )}
+
       {/* TTS 专用 */}
       {rule.actionType === 'TTS' && (
         <TextField
