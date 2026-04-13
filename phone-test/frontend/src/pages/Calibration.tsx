@@ -1,4 +1,5 @@
-import { Box, Typography, Button, Paper, Select, MenuItem, Grid, TextField, Alert, Snackbar, Chip } from '@mui/material'
+import { Box, Typography, Button, Paper, Select, MenuItem, Grid, TextField, Alert, Snackbar, Chip, Slider, IconButton } from '@mui/material'
+import { Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material'
 import { useDeviceStore } from '../stores/deviceStore'
 import { devicesApi } from '../api/devices'
 import apiClient from '../api/client'
@@ -29,6 +30,8 @@ export default function Calibration() {
   const [forms, setForms] = useState<Forms>(initForms())
   const [activeIdx, setActiveIdx] = useState<PtIdx | null>(1)
   const [readingPos, setReadingPos] = useState<PtIdx | null>(null)
+  const [offsetX, setOffsetX] = useState(0)
+  const [offsetY, setOffsetY] = useState(0)
   const [toast, setToast] = useState<{ msg: string; severity: 'success' | 'error' | 'warning' | 'info' } | null>(null)
 
   useEffect(() => { fetchDevices() }, [])
@@ -49,6 +52,8 @@ export default function Calibration() {
           }
         })
         setForms(loaded)
+        setOffsetX(cal.offset_x ?? 0)
+        setOffsetY(cal.offset_y ?? 0)
       }
     }).catch(() => {})
   }, [selectedDeviceId])
@@ -114,6 +119,8 @@ export default function Calibration() {
       await devicesApi.calibrate(selectedDeviceId, {
         pixel_points: POINTS.map(i => [parseFloat(forms[i].px), parseFloat(forms[i].py)]),
         mech_points: POINTS.map(i => [parseFloat(forms[i].mx), parseFloat(forms[i].my)]),
+        offset_x: offsetX,
+        offset_y: offsetY,
       })
       setToast({ msg: '手眼标定保存成功！', severity: 'success' })
     } catch (e) {
@@ -235,6 +242,54 @@ export default function Calibration() {
                 </Box>
               )
             })}
+
+            {/* Offset 微调 */}
+            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #333' }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: '#ccc' }}>
+                偏移微调 (offset)
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#888', mb: 1.5, display: 'block' }}>
+                标定后如果联动位置有整体偏移，在此微调。正值向右/下偏移，负值向左/上偏移，单位 mm。
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#aaa' }}>X 偏移: {offsetX.toFixed(1)} mm</Typography>
+                  <Slider
+                    value={offsetX}
+                    onChange={(_, v) => setOffsetX(v as number)}
+                    min={-10} max={10} step={0.1}
+                    size="small"
+                    sx={{ mt: 0.5, '& .MuiSlider-thumb': { width: 14, height: 14 } }}
+                  />
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" sx={{ color: '#aaa' }}>Y 偏移: {offsetY.toFixed(1)} mm</Typography>
+                  <Slider
+                    value={offsetY}
+                    onChange={(_, v) => setOffsetY(v as number)}
+                    min={-10} max={10} step={0.1}
+                    size="small"
+                    sx={{ mt: 0.5, '& .MuiSlider-thumb': { width: 14, height: 14 } }}
+                  />
+                </Box>
+                <Button
+                  size="small" variant="outlined"
+                  onClick={async () => {
+                    if (!selectedDeviceId) return
+                    try {
+                      await devicesApi.updateOffset(selectedDeviceId, offsetX, offsetY)
+                      setToast({ msg: `偏移已更新: X=${offsetX.toFixed(1)}, Y=${offsetY.toFixed(1)} mm`, severity: 'success' })
+                    } catch (e) {
+                      setToast({ msg: `更新偏移失败: ${e}`, severity: 'error' })
+                    }
+                  }}
+                  disabled={!selectedDeviceId}
+                  sx={{ flexShrink: 0, minWidth: 80, fontSize: 12 }}
+                >
+                  应用偏移
+                </Button>
+              </Box>
+            </Box>
           </Paper>
         </Grid>
       </Grid>

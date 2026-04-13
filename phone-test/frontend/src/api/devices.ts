@@ -12,10 +12,12 @@ export const devicesApi = {
   execute: (id: number, action: string, params: Record<string, unknown> = {}) =>
     client.post(`/devices/${id}/execute`, { action, params }),
   stop: (id: number) => client.post(`/devices/${id}/stop`),
-  calibrate: (id: number, data: { pixel_points: number[][]; mech_points: number[][] }) =>
+  calibrate: (id: number, data: { pixel_points: number[][]; mech_points: number[][]; offset_x?: number; offset_y?: number }) =>
     client.post(`/devices/${id}/calibrate`, data),
   getCalibration: (id: number) =>
-    client.get<{ pixel_points: number[][]; mech_points: number[][] } | null>(`/devices/${id}/calibration`).then(r => r.data),
+    client.get<{ pixel_points: number[][]; mech_points: number[][]; offset_x: number; offset_y: number } | null>(`/devices/${id}/calibration`).then(r => r.data),
+  updateOffset: (id: number, offset_x: number, offset_y: number) =>
+    client.patch(`/devices/${id}/calibration/offset`, { offset_x, offset_y }).then(r => r.data),
   getPosition: (id: number) =>
     client.get<{ x: number; y: number; z: number }>(`/devices/${id}/position`).then(r => r.data),
   moveToPixel: (id: number, px: number, py: number) =>
