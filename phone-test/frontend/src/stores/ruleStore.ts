@@ -122,13 +122,17 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
   selectSub: (subId) => set({ selectedSubId: subId }),
 
   addSubAction: (ruleId) =>
-    set((s) => ({
-      rules: s.rules.map((r) =>
-        r.id === ruleId
-          ? { ...r, subActions: [...r.subActions, createSubAction()] }
-          : r
-      ),
-    })),
+    set((s) => {
+      const newSub = createSubAction()
+      return {
+        rules: s.rules.map((r) =>
+          r.id === ruleId
+            ? { ...r, subActions: [...r.subActions, newSub] }
+            : r
+        ),
+        selectedSubId: newSub.id,
+      }
+    }),
 
   removeSubAction: (ruleId, subId) =>
     set((s) => ({
@@ -137,6 +141,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
           ? { ...r, subActions: r.subActions.filter((sa) => sa.id !== subId) }
           : r
       ),
+      selectedSubId: s.selectedSubId === subId ? null : s.selectedSubId,
     })),
 
   updateSubAction: (ruleId, subId, partial) =>
