@@ -1,4 +1,4 @@
-import { Box, Typography, Button, Paper, Select, MenuItem, Grid, TextField, Alert, Snackbar, Chip, Slider, IconButton } from '@mui/material'
+import { Box, Typography, Button, Paper, Select, MenuItem, Grid, TextField, Alert, Snackbar, Chip, Slider, IconButton, Checkbox, FormControlLabel } from '@mui/material'
 import { Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material'
 import { useDeviceStore } from '../stores/deviceStore'
 import { devicesApi } from '../api/devices'
@@ -26,7 +26,7 @@ const POINT_HINTS = [
 
 export default function Calibration() {
   const devices = useDeviceStore((s) => s.devices)
-  const { selectedDeviceId, selectDevice, fetchDevices, triggerRefresh } = useDeviceStore()
+  const { selectedDeviceId, selectDevice, fetchDevices, triggerRefresh, armLinkEnabled, setArmLinkEnabled } = useDeviceStore()
   const [forms, setForms] = useState<Forms>(initForms())
   const [activeIdx, setActiveIdx] = useState<PtIdx | null>(1)
   const [readingPos, setReadingPos] = useState<PtIdx | null>(null)
@@ -149,6 +149,15 @@ export default function Calibration() {
           {devices.map((d) => <MenuItem key={d.id} value={d.id}>#{d.id} - {d.ip}</MenuItem>)}
         </Select>
         <Button variant="outlined" onClick={() => triggerRefresh()}>刷新图像</Button>
+        <Button variant="outlined" onClick={async () => {
+          if (!selectedDeviceId) return
+          try { await devicesApi.home(selectedDeviceId) } catch {}
+        }} disabled={!selectedDeviceId}>归位</Button>
+        <FormControlLabel
+          control={<Checkbox size="small" checked={armLinkEnabled} onChange={(e) => setArmLinkEnabled(e.target.checked)} sx={{ color: armLinkEnabled ? colors.success : undefined, '&.Mui-checked': { color: colors.success } }} />}
+          label="联动"
+          sx={{ '& .MuiTypography-root': { fontSize: 13, color: armLinkEnabled ? colors.success : undefined } }}
+        />
         <Button variant="contained" onClick={handleSaveAll} disabled={!allFilled}
           sx={{ bgcolor: colors.success }}>
           保存标定
