@@ -12,15 +12,43 @@ import { useDeviceStore } from '../stores/deviceStore'
 import { useLogStore } from '../stores/logStore'
 import { wsClient } from '../api/ws'
 import { colors } from '../theme'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
 
 export default function DevTools() {
   const rules = useRuleStore((s) => s.rules)
+  const reorderRules = useRuleStore((s) => s.reorderRules)
   const selectedDeviceId = useDeviceStore((s) => s.selectedDeviceId)
   const setVisionTargets = useDeviceStore((s) => s.setVisionTargets)
   const addLog = useLogStore((s) => s.addLog)
   const [taskProgress, setTaskProgress] = useState<{ step: number; total: number; action: string } | null>(null)
 
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const handleRuleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const from = rules.findIndex((r) => r.id === active.id)
+    const to = rules.findIndex((r) => r.id === over.id)
+    if (from >= 0 && to >= 0) reorderRules(from, to)
+  }
 
   const handleMatchResults = useCallback((results: Array<{ label: string; x: number; y: number; w: number; h: number; confidence: number }>) => {
     const targets = results.map(r => ({
@@ -87,9 +115,13 @@ export default function DevTools() {
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1, overflow: 'hidden' }}>
         <ScriptToolbar />
         <Box sx={{ flex: 1, overflow: 'auto', mt: 1 }}>
-          {rules.map((rule, idx) => (
-            <RuleCard key={rule.id} rule={rule} index={idx} />
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRuleDragEnd}>
+            <SortableContext items={rules.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+              {rules.map((rule, idx) => (
+                <RuleCard key={rule.id} rule={rule} index={idx} />
+              ))}
+            </SortableContext>
+          </DndContext>
         </Box>
       </Box>
 
