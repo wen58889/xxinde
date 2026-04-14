@@ -6,7 +6,10 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import ImageIcon from '@mui/icons-material/Image'
 import TextFieldsIcon from '@mui/icons-material/TextFields'
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
 import { useState, useRef } from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Rule } from '../../types/rule'
 import { useRuleStore } from '../../stores/ruleStore'
 import RuleParams from './RuleParams'
@@ -30,6 +33,22 @@ export default function RuleCard({ rule, index }: Props) {
   const selectedRuleId = useRuleStore((s) => s.selectedRuleId)
   const addSubAction = useRuleStore((s) => s.addSubAction)
   const updateSubAction = useRuleStore((s) => s.updateSubAction)
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: rule.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  }
 
   const [editing, setEditing] = useState(false)
   const [nameVal, setNameVal] = useState(rule.name)
@@ -76,6 +95,8 @@ export default function RuleCard({ rule, index }: Props) {
 
   return (
     <Box
+      ref={setNodeRef}
+      style={style}
       sx={{
         bgcolor: colors.card,
         borderRadius: 1,
@@ -86,6 +107,15 @@ export default function RuleCard({ rule, index }: Props) {
     >
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', px: 1, py: 0.3 }}>
+        {/* Drag handle */}
+        <IconButton
+          size="small"
+          {...attributes}
+          {...listeners}
+          sx={{ cursor: 'grab', color: '#666', '&:hover': { color: '#aaa' }, mr: -0.5 }}
+        >
+          <DragIndicatorIcon sx={{ fontSize: 16 }} />
+        </IconButton>
         <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggleExpand(rule.id) }}>
           {rule.expanded ? <ExpandLessIcon sx={{ fontSize: 16 }} /> : <ExpandMoreIcon sx={{ fontSize: 16 }} />}
         </IconButton>

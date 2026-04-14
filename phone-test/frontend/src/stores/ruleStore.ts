@@ -66,6 +66,7 @@ interface RuleStore {
   removeSubAction: (ruleId: string, subId: string) => void
   updateSubAction: (ruleId: string, subId: string, partial: Partial<SubAction>) => void
   reorderSubActions: (ruleId: string, fromIndex: number, toIndex: number) => void
+  reorderRules: (fromIndex: number, toIndex: number) => void
 
   setCoordinate: (x: number, y: number) => void
   clearAll: () => void
@@ -174,6 +175,14 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
         return { ...r, subActions: arr }
       }),
     })),
+
+  reorderRules: (fromIndex, toIndex) =>
+    set((s) => {
+      const arr = [...s.rules]
+      const [moved] = arr.splice(fromIndex, 1)
+      arr.splice(toIndex, 0, moved)
+      return { rules: arr }
+    }),
 
   setCoordinate: (x, y) => {
     const { selectedRuleId, selectedSubId, rules } = get()
