@@ -6,7 +6,7 @@ import { useRuleStore } from '../../stores/ruleStore'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-const actionTypes: ActionType[] = ['点击', '滑屏', 'TTS']
+const actionTypes: ActionType[] = ['点击', '滑屏', '识图', '识字', 'TTS']
 
 const badges = ['❶', '❷', '❸', '❹', '❺', '❻', '❼', '❽', '❾', '❿']
 

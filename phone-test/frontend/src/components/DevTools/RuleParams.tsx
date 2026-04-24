@@ -2,7 +2,7 @@ import { Box, Select, MenuItem, TextField, ToggleButton, ToggleButtonGroup, Typo
 import { Rule, ActionType, PositionMode } from '../../types/rule'
 import { useRuleStore } from '../../stores/ruleStore'
 
-const actionTypes: ActionType[] = ['点击', '滑屏', 'TTS']
+const actionTypes: ActionType[] = ['点击', '滑屏', '识图', '识字', 'TTS']
 const positionModes: PositionMode[] = ['中心', '相对', '坐标']
 
 interface Props {
