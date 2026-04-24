@@ -26,9 +26,12 @@ async def lifespan(app: FastAPI):
     await device_manager.start_heartbeat()
 
     # Preload PaddleOCR model in a thread to avoid blocking the event loop
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, ocr_service._ensure_loaded)
-    logging.getLogger(__name__).info("PaddleOCR model preloaded")
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, ocr_service._ensure_loaded)
+        logging.getLogger(__name__).info("PaddleOCR model preloaded")
+    except Exception as e:
+        logging.getLogger(__name__).warning("PaddleOCR preload skipped: %s", e)
 
     logging.getLogger(__name__).info("Server started")
     yield
