@@ -54,7 +54,7 @@ class OCRService:
             if self._initialized:
                 return
             import os
-            os.environ.setdefault('PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK', 'True')
+            os.environ.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
             try:
                 from paddleocr import PaddleOCR
                 self._ocr = PaddleOCR(
@@ -63,8 +63,11 @@ class OCRService:
                     use_doc_unwarping=False,
                     use_textline_orientation=False,
                 )
+                # Detect API version: 3.x uses .predict(), 2.x uses .ocr()
+                self._use_predict_api = hasattr(self._ocr, 'predict') and callable(getattr(self._ocr, 'predict', None))
                 self._initialized = True
-                logger.info("PaddleOCR 3.x model loaded successfully (lang=ch, CPU)")
+                api_ver = "3.x (.predict())" if self._use_predict_api else "2.x (.ocr())"
+                logger.info("PaddleOCR model loaded successfully (lang=ch, CPU, API=%s)", api_ver)
             except ImportError:
                 logger.error("PaddleOCR not installed. Run: pip install paddlepaddle paddleocr")
                 raise
@@ -121,52 +124,75 @@ class OCRService:
 
         try:
             text_results: list[TextResult] = []
-            for result in self._ocr.predict(img_rgb):
-                rec_texts = result.get('rec_texts', [])
-                rec_scores = result.get('rec_scores', [])
-                rec_polys = result.get('rec_polys', [])
-                for i, text in enumerate(rec_texts):
-                    if not text or not text.strip():
-                        continue
-                    conf = rec_scores[i] if i < len(rec_scores) else 0.0
 
-                    # Compute bounding box from 4-point polygon
-                    if i < len(rec_polys):
-                        pts = np.array(rec_polys[i], dtype=np.float32)
+            if self._use_predict_api:
+                # PaddleOCR 3.x API: .predict() yields dicts
+                for result in self._ocr.predict(img_rgb):
+                    rec_texts = result.get('rec_texts', [])
+                    rec_scores = result.get('rec_scores', [])
+                    rec_polys = result.get('rec_polys', [])
+                    for i, text in enumerate(rec_texts):
+                        if not text or not text.strip():
+                            continue
+                        conf = rec_scores[i] if i < len(rec_scores) else 0.0
+
+                        if i < len(rec_polys):
+                            pts = np.array(rec_polys[i], dtype=np.float32)
+                            bx1 = float(pts[:, 0].min())
+                            by1 = float(pts[:, 1].min())
+                            bx2 = float(pts[:, 0].max())
+                            by2 = float(pts[:, 1].max())
+                        else:
+                            bx1 = by1 = bx2 = by2 = 0.0
+
+                        cx = (bx1 + bx2) / 2.0
+                        cy = (by1 + by2) / 2.0
+                        bw = bx2 - bx1
+                        bh = by2 - by1
+
+                        if scale < 1.0:
+                            inv = 1.0 / scale
+                            cx *= inv; cy *= inv; bw *= inv; bh *= inv
+
+                        if region:
+                            cx += region[0]; cy += region[1]
+
+                        text_results.append(TextResult(
+                            text=text.strip(), x=cx, y=cy, w=bw, h=bh,
+                            confidence=float(conf),
+                        ))
+                    break  # predict() yields per-image; we only have one
+            else:
+                # PaddleOCR 2.x API: .ocr() returns list of pages
+                ocr_result = self._ocr.ocr(img_rgb, cls=True)
+                if ocr_result and ocr_result[0]:
+                    for line in ocr_result[0]:
+                        box, (text, conf) = line
+                        if not text or not text.strip():
+                            continue
+                        # box is [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+                        pts = np.array(box, dtype=np.float32)
                         bx1 = float(pts[:, 0].min())
                         by1 = float(pts[:, 1].min())
                         bx2 = float(pts[:, 0].max())
                         by2 = float(pts[:, 1].max())
-                    else:
-                        bx1 = by1 = bx2 = by2 = 0.0
 
-                    cx = (bx1 + bx2) / 2.0
-                    cy = (by1 + by2) / 2.0
-                    bw = bx2 - bx1
-                    bh = by2 - by1
+                        cx = (bx1 + bx2) / 2.0
+                        cy = (by1 + by2) / 2.0
+                        bw = bx2 - bx1
+                        bh = by2 - by1
 
-                    # Map coordinates back to original image size if downscaled
-                    if scale < 1.0:
-                        inv = 1.0 / scale
-                        cx *= inv
-                        cy *= inv
-                        bw *= inv
-                        bh *= inv
+                        if scale < 1.0:
+                            inv = 1.0 / scale
+                            cx *= inv; cy *= inv; bw *= inv; bh *= inv
 
-                    # Offset back if region was cropped
-                    if region:
-                        cx += region[0]
-                        cy += region[1]
+                        if region:
+                            cx += region[0]; cy += region[1]
 
-                    text_results.append(TextResult(
-                        text=text.strip(),
-                        x=cx,
-                        y=cy,
-                        w=bw,
-                        h=bh,
-                        confidence=float(conf),
-                    ))
-                break  # predict() yields per-image; we only have one
+                        text_results.append(TextResult(
+                            text=text.strip(), x=cx, y=cy, w=bw, h=bh,
+                            confidence=float(conf),
+                        ))
         except Exception as e:
             logger.error("PaddleOCR inference failed: %s", e, exc_info=True)
             raise
