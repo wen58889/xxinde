@@ -28,7 +28,13 @@ async def execute_on_device(
     try:
         task_id = await scheduler.dispatch_task(device_id, yaml_content)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        msg = str(e)
+        if "not found" in msg:
+            raise HTTPException(404, msg)
+        elif "not ONLINE" in msg:
+            raise HTTPException(409, msg)
+        else:
+            raise HTTPException(400, msg)
 
     result = await db.execute(select(TaskExecution).where(TaskExecution.id == task_id))
     return result.scalar_one()
@@ -77,7 +83,13 @@ async def run_yaml_on_device(
     try:
         task_id = await scheduler.dispatch_task(device_id, req.yaml_content)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        msg = str(e)
+        if "not found" in msg:
+            raise HTTPException(404, msg)
+        elif "not ONLINE" in msg:
+            raise HTTPException(409, msg)
+        else:
+            raise HTTPException(400, msg)
     result = await db.execute(select(TaskExecution).where(TaskExecution.id == task_id))
     return result.scalar_one()
 

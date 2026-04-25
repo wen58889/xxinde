@@ -58,6 +58,7 @@ export const tasksApi = {
 
 export const emergencyApi = {
   stopAll: () => client.post('/emergency_stop'),
+  resetAll: () => client.post('/emergency_reset'),
 }
 
 export const visionApi = {
