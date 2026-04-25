@@ -13,6 +13,12 @@ async def emergency_stop(_=Depends(verify_token)):
     return {"message": "Emergency stop triggered for all devices"}
 
 
+@router.post("/emergency_reset", response_model=MessageOut)
+async def emergency_reset(_=Depends(verify_token)):
+    await device_manager.reset_all()
+    return {"message": "All devices reset from ESTOP"}
+
+
 @router.post("/devices/{device_id}/estop", response_model=MessageOut)
 async def device_estop(device_id: int, _=Depends(verify_token)):
     await device_manager.set_estop(device_id)

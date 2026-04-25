@@ -178,5 +178,18 @@ class DeviceManager:
                 dev.missed_heartbeats = 0
                 await db.commit()
 
+    async def reset_all(self):
+        """Reset all ESTOP devices so heartbeat can re-evaluate their status."""
+        async with async_session() as db:
+            result = await db.execute(select(Device).where(Device.status == DeviceStatus.ESTOP))
+            devices = result.scalars().all()
+            for dev in devices:
+                dev.status = DeviceStatus.OFFLINE
+                dev.missed_heartbeats = 0
+            await db.commit()
+        if devices:
+            await ws_manager.broadcast("emergency_reset", {"count": len(devices)})
+            logger.info("Reset %d devices from ESTOP", len(devices))
+
 
 device_manager = DeviceManager()

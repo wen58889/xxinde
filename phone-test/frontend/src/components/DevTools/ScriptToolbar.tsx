@@ -71,8 +71,10 @@ export default function ScriptToolbar() {
       const yaml = rulesToYaml(rules)
       const res = await tasksApi.runYaml(selectedDeviceId, yaml) as any
       addLog(`任务已提交 #${res.id}`, 'success')
-    } catch (e) {
-      addLog(`运行失败: ${e}`, 'error')
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail
+      const msg = detail || (e instanceof Error ? e.message : String(e))
+      addLog(`运行失败: ${msg}`, 'error')
     }
   }
 
