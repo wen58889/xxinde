@@ -98,20 +98,25 @@ class Scheduler:
 
         final_status = TaskStatus.FAILED
         try:
-            results = await engine.execute_yaml(yaml_content)
+            loop_count = 0
+            while not engine._stopped:
+                loop_count += 1
+                logger.info("[%d] Loop %d started", device_id, loop_count)
+                results = await engine.execute_yaml(yaml_content)
+                if results["stopped"]:
+                    break
+                if results["failed"] > 0:
+                    logger.warning("[%d] Loop %d had %d failed steps, continuing...",
+                                   device_id, loop_count, results["failed"])
             async with async_session() as db:
                 result = await db.execute(
                     select(TaskExecution).where(TaskExecution.id == task_id)
                 )
                 task = result.scalar_one()
                 task.finished_at = datetime.now(timezone.utc)
-                if results["stopped"]:
+                if engine._stopped:
                     task.status = TaskStatus.STOPPED
                     final_status = TaskStatus.STOPPED
-                elif results["failed"] > 0:
-                    task.status = TaskStatus.FAILED
-                    task.error = "; ".join(results["errors"])
-                    final_status = TaskStatus.FAILED
                 else:
                     task.status = TaskStatus.SUCCESS
                     final_status = TaskStatus.SUCCESS
