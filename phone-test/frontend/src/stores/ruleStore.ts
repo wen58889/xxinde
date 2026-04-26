@@ -49,6 +49,14 @@ function createSubAction(): SubAction {
   }
 }
 
+function deepCloneRule(r: Rule): Rule {
+  return {
+    ...r,
+    detectArea: [...r.detectArea] as Rule['detectArea'],
+    subActions: r.subActions.map(sa => ({ ...sa })),
+  }
+}
+
 interface RuleStore {
   rules: Rule[]
   selectedRuleId: string | null
@@ -91,7 +99,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
     }),
 
   removeRule: (id) =>
-    set((s) => ({ rules: s.rules.filter((r) => r.id !== id) })),
+    set((s) => ({ rules: s.rules.filter((r) => r.id !== id), selectedRuleId: s.selectedRuleId === id ? null : s.selectedRuleId })),
 
   duplicateRule: (id) =>
     set((s) => {
@@ -99,11 +107,11 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       if (idx < 0) return s
       const src = s.rules[idx]
       const dup: Rule = {
-        ...JSON.parse(JSON.stringify(src)),
+        ...deepCloneRule(src),
         id: `rule-${ruleCounter++}`,
         name: `${src.name} (副本)`,
         subActions: src.subActions.map((sa) => ({
-          ...JSON.parse(JSON.stringify(sa)),
+          ...sa,
           id: `sub-${subCounter++}`,
         })),
       }
@@ -114,7 +122,20 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
 
   updateRule: (id, partial) =>
     set((s) => ({
-      rules: s.rules.map((r) => (r.id === id ? { ...r, ...partial } : r)),
+      rules: s.rules.map((r) => {
+        if (r.id !== id) return r
+        const merged: Rule = {
+          ...r,
+          ...partial,
+          detectArea: partial.detectArea
+            ? [...partial.detectArea] as Rule['detectArea']
+            : [...r.detectArea] as Rule['detectArea'],
+          subActions: partial.subActions
+            ? partial.subActions.map((sa) => ({ ...sa }))
+            : r.subActions.map((sa) => ({ ...sa })),
+        }
+        return merged
+      }),
     })),
 
   toggleExpand: (id) =>
@@ -188,7 +209,6 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
     const { selectedRuleId, selectedSubId, rules } = get()
     if (!selectedRuleId) return
 
-    // If a sub-action is selected and belongs to the current rule, fill its X/Y
     if (selectedSubId) {
       const rule = rules.find((r) => r.id === selectedRuleId)
       const subExists = rule?.subActions.some((sa) => sa.id === selectedSubId)
@@ -209,7 +229,6 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       }
     }
 
-    // Default: fill rule's X/Y
     set({
       rules: rules.map((r) =>
         r.id === selectedRuleId ? { ...r, x, y } : r
@@ -217,7 +236,23 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
     })
   },
 
-  clearAll: () => set({ rules: [createRule()], selectedRuleId: null, selectedSubId: null }),
+  clearAll: () => {
+    ruleCounter = 1
+    subCounter = 1
+    set({ rules: [createRule()], selectedRuleId: null, selectedSubId: null })
+  },
 
-  loadRules: (rules) => set({ rules }),
+  loadRules: (rules) => {
+    ruleCounter = 1
+    subCounter = 1
+    const cloned = rules.map((r) => {
+      const rule = JSON.parse(JSON.stringify(r)) as Rule
+      ruleCounter = Math.max(ruleCounter, parseInt(rule.id.replace('rule-', ''), 10) + 1)
+      rule.subActions.forEach((sa) => {
+        subCounter = Math.max(subCounter, parseInt(sa.id.replace('sub-', ''), 10) + 1)
+      })
+      return rule
+    })
+    set({ rules: cloned, selectedRuleId: null, selectedSubId: null })
+  },
 }))
