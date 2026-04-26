@@ -66,6 +66,12 @@ class FlowEngine:
                 except Exception:
                     pass
 
+        # Park Y after all steps so camera doesn't block the screen
+        try:
+            await self.motion.park_y()
+        except Exception:
+            pass
+
         return results
 
     async def _execute_step(self, step: dict):
@@ -126,6 +132,7 @@ class FlowEngine:
             await asyncio.sleep(wait)
 
     async def _tap_icon(self, template_name: str, threshold: float = 0.85):
+        await self.motion.park_y()  # Move camera away before taking screenshot
         screenshot = await capture_screenshot(self.device_ip)
         coords = await vision_manager.find_icon(
             screenshot, template_name, app_name=self._app_name, threshold=threshold,
@@ -147,6 +154,7 @@ class FlowEngine:
 
     async def _tap_text(self, keyword: str):
         """Find text on screen via OCR and tap it."""
+        await self.motion.park_y()  # Move camera away before taking screenshot
         screenshot = await capture_screenshot(self.device_ip)
         text_coords = await vision_manager.read_text(screenshot)
         for t in text_coords:
@@ -172,6 +180,7 @@ class FlowEngine:
         timeout_s: int,
     ):
         for _ in range(timeout_s * 2):  # Check every 0.5s
+            await self.motion.park_y()  # Move camera away before taking screenshot
             screenshot = await capture_screenshot(self.device_ip)
             if await vision_manager.detect_page_state(
                 screenshot,
@@ -185,6 +194,7 @@ class FlowEngine:
         raise RuntimeError(f"Page state not detected within {timeout_s}s ({desc})")
 
     async def _detect_anomaly(self):
+        await self.motion.park_y()  # Move camera away before taking screenshot
         screenshot = await capture_screenshot(self.device_ip)
         anomaly = await vision_manager.detect_anomaly(screenshot, app_name=self._app_name)
         if anomaly:

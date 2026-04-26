@@ -130,3 +130,14 @@ class MotionController:
     async def home(self):
         await self.client.home()
         logger.info("[%s] Homed", self.client.ip)
+
+    async def park_y(self):
+        """Move Y axis to zero (Y=0) so the camera (mounted on the arm)
+        moves away from above the phone screen, allowing a clear screenshot."""
+        y_park = Y_MIN + _COORD_EPSILON
+        feed = _clamp_feed(DEFAULT_XY_FEED, XY_MAX_FEED)
+        z_feed = _clamp_feed(DEFAULT_Z_FEED, Z_MAX_FEED)
+        await self.client.send_gcode("G90")
+        await self.client.send_gcode(f"G1 Z{Z_SAFE} F{z_feed}")
+        await self.client.send_gcode(f"G1 Y{y_park:.2f} F{feed}")
+        logger.info("[%s] Y parked at %.2f (camera clear of screen)", self.client.ip, y_park)
