@@ -7,12 +7,14 @@ import { colors } from '../../theme'
 export default function EmergencyStop() {
   const addLog = useLogStore((s) => s.addLog)
   const devices = useDeviceStore((s) => s.devices)
+  const fetchDevices = useDeviceStore((s) => s.fetchDevices)
   const hasEstop = devices.some(d => d.status === 'ESTOP')
 
   const handleStop = async () => {
     try {
       await emergencyApi.stopAll()
       addLog('紧急停止已触发！所有设备停止', 'error')
+      fetchDevices()
     } catch (e: any) {
       addLog(`紧急停止失败: ${e?.response?.data?.detail || e}`, 'error')
     }
@@ -20,8 +22,11 @@ export default function EmergencyStop() {
 
   const handleReset = async () => {
     try {
+      addLog('正在复位：重启Klipper固件并恢复设备...', 'warn')
       await emergencyApi.resetAll()
-      addLog('所有设备已复位，心跳将重新检测设备状态', 'success')
+      addLog('固件重启指令已发送，等待设备恢复...', 'success')
+      setTimeout(() => fetchDevices(), 3000)
+      setTimeout(() => fetchDevices(), 8000)
     } catch (e: any) {
       addLog(`复位失败: ${e?.response?.data?.detail || e}`, 'error')
     }
@@ -29,9 +34,8 @@ export default function EmergencyStop() {
 
   return (
     <>
-      {/* 复位按钮 - 仅在有ESTOP设备时显示 */}
       {hasEstop && (
-        <Tooltip title="复位 (解除所有急停)">
+        <Tooltip title="复位 (重启固件+解除急停)">
           <Fab
             size="medium"
             onClick={handleReset}
@@ -51,7 +55,6 @@ export default function EmergencyStop() {
           </Fab>
         </Tooltip>
       )}
-      {/* 紧急停止按钮 */}
       <Tooltip title="紧急停止 (所有设备)">
         <Fab
           size="medium"

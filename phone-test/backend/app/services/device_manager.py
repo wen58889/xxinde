@@ -173,23 +173,43 @@ class DeviceManager:
         async with async_session() as db:
             result = await db.execute(select(Device).where(Device.id == device_id))
             dev = result.scalar_one_or_none()
-            if dev and dev.status == DeviceStatus.ESTOP:
-                dev.status = DeviceStatus.OFFLINE
-                dev.missed_heartbeats = 0
-                await db.commit()
+            if not dev or dev.status != DeviceStatus.ESTOP:
+                return
+            client = self._clients.get(dev.id)
+            if client:
+                try:
+                    await client.firmware_restart()
+                    logger.info("Firmware restart sent to device %d (%s)", dev.id, dev.ip)
+                except Exception as e:
+                    logger.error("Firmware restart failed for device %d (%s): %s", dev.id, dev.ip, e)
+            dev.status = DeviceStatus.RECOVERING
+            dev.missed_heartbeats = 0
+            self._recover_count[dev.id] = 0
+            await db.commit()
+            await ws_manager.broadcast("device_status", {
+                "device_id": dev.id, "status": "RECOVERING",
+            })
 
     async def reset_all(self):
-        """Reset all ESTOP devices so heartbeat can re-evaluate their status."""
+        """Reset all ESTOP devices: firmware_restart + set RECOVERING so heartbeat re-evaluates."""
         async with async_session() as db:
             result = await db.execute(select(Device).where(Device.status == DeviceStatus.ESTOP))
             devices = result.scalars().all()
             for dev in devices:
-                dev.status = DeviceStatus.OFFLINE
+                client = self._clients.get(dev.id)
+                if client:
+                    try:
+                        await client.firmware_restart()
+                        logger.info("Firmware restart sent to device %d (%s)", dev.id, dev.ip)
+                    except Exception as e:
+                        logger.error("Firmware restart failed for device %d (%s): %s", dev.id, dev.ip, e)
+                dev.status = DeviceStatus.RECOVERING
                 dev.missed_heartbeats = 0
+                self._recover_count[dev.id] = 0
             await db.commit()
         if devices:
             await ws_manager.broadcast("emergency_reset", {"count": len(devices)})
-            logger.info("Reset %d devices from ESTOP", len(devices))
+            logger.info("Reset %d devices from ESTOP (firmware_restart sent)", len(devices))
 
 
 device_manager = DeviceManager()
