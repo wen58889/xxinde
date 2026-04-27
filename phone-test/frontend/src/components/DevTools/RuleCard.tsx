@@ -7,7 +7,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import ImageIcon from '@mui/icons-material/Image'
 import TextFieldsIcon from '@mui/icons-material/TextFields'
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
-import { useState, useRef } from 'react'
+import { useState, useRef, memo, useCallback } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Rule } from '../../types/rule'
@@ -22,15 +22,15 @@ import { colors } from '../../theme'
 interface Props {
   rule: Rule
   index: number
+  isSelected: boolean
 }
 
-export default function RuleCard({ rule, index }: Props) {
+const RuleCard = memo(function RuleCard({ rule, index, isSelected }: Props) {
   const toggleExpand = useRuleStore((s) => s.toggleExpand)
   const removeRule = useRuleStore((s) => s.removeRule)
   const duplicateRule = useRuleStore((s) => s.duplicateRule)
   const updateRule = useRuleStore((s) => s.updateRule)
   const selectRule = useRuleStore((s) => s.selectRule)
-  const selectedRuleId = useRuleStore((s) => s.selectedRuleId)
   const addSubAction = useRuleStore((s) => s.addSubAction)
   const updateSubAction = useRuleStore((s) => s.updateSubAction)
 
@@ -56,22 +56,20 @@ export default function RuleCard({ rule, index }: Props) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false)
   const [textDialogOpen, setTextDialogOpen] = useState(false)
 
-  const isSelected = selectedRuleId === rule.id
-
-  const startEdit = (e: React.MouseEvent) => {
+  const startEdit = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setNameVal(rule.name)
     setEditing(true)
     setTimeout(() => inputRef.current?.select(), 10)
-  }
+  }, [rule.name])
 
-  const commitEdit = () => {
+  const commitEdit = useCallback(() => {
     const trimmed = nameVal.trim()
     if (trimmed) updateRule(rule.id, { name: trimmed })
     setEditing(false)
-  }
+  }, [nameVal, rule.id, updateRule])
 
-  const handleInsertImage = (templateName: string, threshold: number) => {
+  const handleInsertImage = useCallback((templateName: string, threshold: number) => {
     addSubAction(rule.id)
     setTimeout(() => {
       const updatedRule = useRuleStore.getState().rules.find((r) => r.id === rule.id)
@@ -80,9 +78,9 @@ export default function RuleCard({ rule, index }: Props) {
         if (lastSub) updateSubAction(rule.id, lastSub.id, { actionType: '识图', templateName, threshold })
       }
     }, 0)
-  }
+  }, [rule.id, addSubAction, updateSubAction])
 
-  const handleInsertText = (keyword: string) => {
+  const handleInsertText = useCallback((keyword: string) => {
     addSubAction(rule.id)
     setTimeout(() => {
       const updatedRule = useRuleStore.getState().rules.find((r) => r.id === rule.id)
@@ -91,7 +89,7 @@ export default function RuleCard({ rule, index }: Props) {
         if (lastSub) updateSubAction(rule.id, lastSub.id, { actionType: '识字', keyword })
       }
     }, 0)
-  }
+  }, [rule.id, addSubAction, updateSubAction])
 
   return (
     <Box
@@ -105,9 +103,7 @@ export default function RuleCard({ rule, index }: Props) {
       }}
       onClick={() => selectRule(rule.id)}
     >
-      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', px: 1, py: 0.3 }}>
-        {/* Drag handle */}
         <IconButton
           size="small"
           {...attributes}
@@ -165,8 +161,7 @@ export default function RuleCard({ rule, index }: Props) {
         </IconButton>
       </Box>
 
-      {/* Body */}
-      <Collapse in={rule.expanded}>
+      <Collapse in={rule.expanded} unmountOnExit>
         <Box sx={{ px: 1, pb: 1 }}>
           <RuleParams rule={rule} />
           <DetectArea rule={rule} />
@@ -174,7 +169,6 @@ export default function RuleCard({ rule, index }: Props) {
         </Box>
       </Collapse>
 
-      {/* Dialogs */}
       <InsertImageDialog
         open={imageDialogOpen}
         onClose={() => setImageDialogOpen(false)}
@@ -187,4 +181,6 @@ export default function RuleCard({ rule, index }: Props) {
       />
     </Box>
   )
-}
+})
+
+export default RuleCard

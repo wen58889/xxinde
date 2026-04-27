@@ -1,6 +1,7 @@
 import { Box, Select, MenuItem, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
 import { Rule, ActionType, PositionMode } from '../../types/rule'
 import { useRuleStore } from '../../stores/ruleStore'
+import { memo, useCallback } from 'react'
 
 const actionTypes: ActionType[] = ['点击', '滑屏', '识图', '识字', 'TTS']
 const positionModes: PositionMode[] = ['中心', '相对', '坐标']
@@ -9,9 +10,9 @@ interface Props {
   rule: Rule
 }
 
-export default function RuleParams({ rule }: Props) {
+const RuleParams = memo(function RuleParams({ rule }: Props) {
   const updateRule = useRuleStore((s) => s.updateRule)
-  const u = (p: Partial<Rule>) => updateRule(rule.id, p)
+  const u = useCallback((p: Partial<Rule>) => updateRule(rule.id, p), [rule.id, updateRule])
 
   const numField = (label: string, value: number, key: keyof Rule, width = 68) => (
     <TextField
@@ -27,7 +28,6 @@ export default function RuleParams({ rule }: Props) {
 
   return (
     <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap', py: 0.5 }}>
-      {/* 动作类型 */}
       <Select
         size="small"
         value={rule.actionType}
@@ -37,7 +37,6 @@ export default function RuleParams({ rule }: Props) {
         {actionTypes.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
       </Select>
 
-      {/* 坐标模式 */}
       <ToggleButtonGroup
         size="small"
         exclusive
@@ -52,20 +51,12 @@ export default function RuleParams({ rule }: Props) {
         ))}
       </ToggleButtonGroup>
 
-      {/* 坐标 - 需要更宽以显示0~1280的值 */}
       {numField('X', rule.x, 'x', 72)}
       {numField('Y', rule.y, 'y', 72)}
-
-      {/* 随机偏移 */}
       {numField('随机', rule.radius, 'radius', 62)}
-
-      {/* 次数 */}
       {numField('次数', rule.count, 'count', 55)}
-
-      {/* 长按/秒 */}
       {numField('长按/秒', rule.longPress, 'longPress', 65)}
 
-      {/* 滑屏专用参数 */}
       {rule.actionType === '滑屏' && (
         <>
           <Typography variant="caption" sx={{ color: '#888' }}>→</Typography>
@@ -75,7 +66,6 @@ export default function RuleParams({ rule }: Props) {
         </>
       )}
 
-      {/* 识图专用 */}
       {rule.actionType === '识图' && (
         <>
           <TextField
@@ -89,7 +79,6 @@ export default function RuleParams({ rule }: Props) {
         </>
       )}
 
-      {/* 识字专用 */}
       {rule.actionType === '识字' && (
         <TextField
           size="small"
@@ -100,7 +89,6 @@ export default function RuleParams({ rule }: Props) {
         />
       )}
 
-      {/* TTS 专用 */}
       {rule.actionType === 'TTS' && (
         <TextField
           size="small"
@@ -111,16 +99,13 @@ export default function RuleParams({ rule }: Props) {
         />
       )}
 
-      {/* 定时/秒 */}
       {numField('定时/秒', rule.timer, 'timer', 65)}
-
-      {/* 概率 */}
       {numField('概率', rule.probability, 'probability', 55)}
-
-      {/* 等待/秒 min - max */}
       {numField('等待min', rule.waitMin, 'waitMin', 68)}
       <Typography variant="caption" sx={{ color: '#888' }}>-</Typography>
       {numField('max', rule.waitMax, 'waitMax', 55)}
     </Box>
   )
-}
+})
+
+export default RuleParams

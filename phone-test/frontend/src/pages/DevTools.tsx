@@ -29,6 +29,7 @@ import {
 
 export default function DevTools() {
   const rules = useRuleStore((s) => s.rules)
+  const selectedRuleId = useRuleStore((s) => s.selectedRuleId)
   const reorderRules = useRuleStore((s) => s.reorderRules)
   const selectedDeviceId = useDeviceStore((s) => s.selectedDeviceId)
   const setVisionTargets = useDeviceStore((s) => s.setVisionTargets)
@@ -118,7 +119,7 @@ export default function DevTools() {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRuleDragEnd}>
             <SortableContext items={rules.map((r) => r.id)} strategy={verticalListSortingStrategy}>
               {rules.map((rule, idx) => (
-                <RuleCard key={rule.id} rule={rule} index={idx} />
+                <RuleCard key={rule.id} rule={rule} index={idx} isSelected={selectedRuleId === rule.id} />
               ))}
             </SortableContext>
           </DndContext>

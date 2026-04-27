@@ -1,22 +1,24 @@
 import { Box, TextField, Button, Typography } from '@mui/material'
 import { Rule } from '../../types/rule'
 import { useRuleStore } from '../../stores/ruleStore'
+import { memo, useCallback } from 'react'
 
 interface Props {
   rule: Rule
 }
 
-export default function DetectArea({ rule }: Props) {
+const DetectArea = memo(function DetectArea({ rule }: Props) {
   const updateRule = useRuleStore((s) => s.updateRule)
   const da = rule.detectArea
+  const ruleId = rule.id
 
-  const setPoint = (idx: number, val: number) => {
+  const setPoint = useCallback((idx: number, val: number) => {
     const next = [...da] as Rule['detectArea']
     next[idx] = val
-    updateRule(rule.id, { detectArea: next })
-  }
+    updateRule(ruleId, { detectArea: next })
+  }, [da, ruleId, updateRule])
 
-  const clear = () => updateRule(rule.id, { detectArea: [0, 0, 0, 0, 0, 0, 0, 0] })
+  const clear = useCallback(() => updateRule(ruleId, { detectArea: [0, 0, 0, 0, 0, 0, 0, 0] }), [ruleId, updateRule])
 
   const labels = ['x1', 'y1', 'x2', 'y2', 'x3', 'y3', 'x4', 'y4']
 
@@ -40,4 +42,6 @@ export default function DetectArea({ rule }: Props) {
       </Button>
     </Box>
   )
-}
+})
+
+export default DetectArea
