@@ -9,7 +9,7 @@ function createRule(name?: string): Rule {
   return {
     id,
     name: name || `新规则 ${ruleCounter - 1}`,
-    expanded: true,
+    expanded: false,
     actionType: '点击',
     positionMode: '坐标',
     x: 0, y: 0,
@@ -124,16 +124,9 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
     set((s) => ({
       rules: s.rules.map((r) => {
         if (r.id !== id) return r
-        const merged: Rule = {
-          ...r,
-          ...partial,
-          detectArea: partial.detectArea
-            ? [...partial.detectArea] as Rule['detectArea']
-            : [...r.detectArea] as Rule['detectArea'],
-          subActions: partial.subActions
-            ? partial.subActions.map((sa) => ({ ...sa }))
-            : r.subActions.map((sa) => ({ ...sa })),
-        }
+        const merged: Rule = { ...r, ...partial }
+        if ('detectArea' in partial && partial.detectArea) merged.detectArea = [...partial.detectArea] as Rule['detectArea']
+        if ('subActions' in partial && partial.subActions) merged.subActions = partial.subActions.map((sa) => ({ ...sa }))
         return merged
       }),
     })),

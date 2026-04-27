@@ -5,6 +5,7 @@ import { SubAction, ActionType } from '../../types/rule'
 import { useRuleStore } from '../../stores/ruleStore'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { memo, useCallback } from 'react'
 
 const actionTypes: ActionType[] = ['点击', '滑屏', '识图', '识字', 'TTS']
 
@@ -16,7 +17,7 @@ interface Props {
   index: number
 }
 
-export default function SubActionRow({ ruleId, sub, index }: Props) {
+const SubActionRow = memo(function SubActionRow({ ruleId, sub, index }: Props) {
   const updateSubAction = useRuleStore((s) => s.updateSubAction)
   const removeSubAction = useRuleStore((s) => s.removeSubAction)
   const selectSub = useRuleStore((s) => s.selectSub)
@@ -33,7 +34,7 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
     opacity: isDragging ? 0.5 : 1,
   }
 
-  const u = (p: Partial<SubAction>) => updateSubAction(ruleId, sub.id, p)
+  const u = useCallback((p: Partial<SubAction>) => updateSubAction(ruleId, sub.id, p), [ruleId, sub.id, updateSubAction])
 
   const numField = (label: string, value: number, key: keyof SubAction, width = 62) => (
     <TextField
@@ -82,20 +83,12 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         {actionTypes.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
       </Select>
 
-      {/* 坐标 - 需要更宽以显示0~1280的值 */}
       {numField('X', sub.x, 'x', 68)}
       {numField('Y', sub.y, 'y', 68)}
-
-      {/* 随机偏移 */}
       {numField('随机', sub.radius, 'radius', 58)}
-
-      {/* 次数 */}
       {numField('次数', sub.count, 'count', 52)}
-
-      {/* 长按/秒 */}
       {numField('长按/秒', sub.longPress, 'longPress', 60)}
 
-      {/* 滑屏专用 */}
       {sub.actionType === '滑屏' && (
         <>
           <Typography variant="caption" sx={{ color: '#888' }}>→</Typography>
@@ -105,7 +98,6 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         </>
       )}
 
-      {/* 识图专用 */}
       {sub.actionType === '识图' && (
         <>
           <TextField
@@ -119,7 +111,6 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         </>
       )}
 
-      {/* 识字专用 */}
       {sub.actionType === '识字' && (
         <TextField
           size="small"
@@ -130,7 +121,6 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         />
       )}
 
-      {/* TTS 专用 */}
       {sub.actionType === 'TTS' && (
         <TextField
           size="small"
@@ -141,14 +131,10 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
         />
       )}
 
-      {/* 概率 */}
       {numField('概率', sub.probability, 'probability', 52)}
-
-      {/* 等待/秒 min - max */}
       {numField('等min', sub.waitMin, 'waitMin', 58)}
       {numField('max', sub.waitMax, 'waitMax', 48)}
 
-      {/* 备注 (非TTS时显示) */}
       {sub.actionType !== 'TTS' && (
         <TextField
           size="small"
@@ -164,4 +150,6 @@ export default function SubActionRow({ ruleId, sub, index }: Props) {
       </IconButton>
     </Box>
   )
-}
+})
+
+export default SubActionRow

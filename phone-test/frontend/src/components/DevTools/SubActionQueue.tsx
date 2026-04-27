@@ -2,6 +2,7 @@ import { Box, Button } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import { Rule } from '../../types/rule'
 import { useRuleStore } from '../../stores/ruleStore'
+import { memo } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -22,7 +23,7 @@ interface Props {
   rule: Rule
 }
 
-export default function SubActionQueue({ rule }: Props) {
+const SubActionQueue = memo(function SubActionQueue({ rule }: Props) {
   const addSubAction = useRuleStore((s) => s.addSubAction)
   const reorderSubActions = useRuleStore((s) => s.reorderSubActions)
 
@@ -60,4 +61,6 @@ export default function SubActionQueue({ rule }: Props) {
       </Button>
     </Box>
   )
-}
+})
+
+export default SubActionQueue

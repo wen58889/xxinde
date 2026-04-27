@@ -27,7 +27,7 @@ function makeRule(overrides: Partial<Rule> = {}): Rule {
   return {
     id: nextRuleId(),
     name: '新规则',
-    expanded: true,
+    expanded: false,
     actionType: '点击',
     positionMode: '坐标',
     x: 0, y: 0,
