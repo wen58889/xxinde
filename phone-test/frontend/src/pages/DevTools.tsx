@@ -90,7 +90,7 @@ export default function DevTools() {
   return (
     <Box sx={{ display: 'flex', height: '100vh', bgcolor: colors.bg }}>
       {/* Left: Device preview & control */}
-      <Box sx={{ width: 460, display: 'flex', flexDirection: 'column', p: 1, borderRight: '1px solid #333' }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1, borderRight: '1px solid #333' }}>
         <DeviceToolbar />
         <PhonePreview />
         <DeviceControls
