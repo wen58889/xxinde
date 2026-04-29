@@ -31,6 +31,19 @@ export const devicesApi = {
     }>(
       `/devices/${id}/move_to_pixel`, { px, py }
     ).then(r => r.data),
+  tapPixel: (id: number, px: number, py: number) =>
+    client.post<{
+      pixel: { x: number; y: number }
+      mech: { x: number; y: number }
+      calibrated: boolean
+      tapped: boolean
+      tap_error: string | null
+      message: string
+    }>(
+      `/devices/${id}/tap_pixel`, { px, py }
+    ).then(r => r.data),
+  parkY: (id: number) =>
+    client.post(`/devices/${id}/park_y`).then(r => r.data),
 }
 
 export const templatesApi = {

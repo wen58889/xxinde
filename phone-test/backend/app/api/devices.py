@@ -155,6 +155,31 @@ async def firmware_restart_device(
     return {"message": f"Device {device_id} firmware restarting"}
 
 
+@router.post("/{device_id}/park_y", response_model=MessageOut)
+async def park_y_device(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_token),
+):
+    """Y轴归位到0，让摄像头避开手机屏幕上方，以便拍摄清晰画面"""
+    client = device_manager.get_client(device_id)
+    if not client:
+        result = await db.execute(select(Device).where(Device.id == device_id))
+        dev = result.scalar_one_or_none()
+        if not dev:
+            raise HTTPException(404, f"Device {device_id} not found")
+        settings = get_settings()
+        from app.services.moonraker_client import MoonrakerClient as _MC
+        client = _MC(dev.ip, settings.device_moonraker_port)
+        device_manager._clients[device_id] = client
+    motion = MotionController(client)
+    try:
+        await motion.park_y()
+    except Exception as e:
+        raise HTTPException(502, f"Park Y failed: {e}")
+    return {"message": f"Device {device_id} Y-axis parked"}
+
+
 @router.post("/{device_id}/vision")
 async def vision_action(
     device_id: int,
@@ -320,6 +345,64 @@ async def move_to_pixel(
         "calibrated": calibrated,
         "moved": move_error is None,
         "move_error": move_error,
+        "message": msg,
+    }
+
+
+@router.post("/{device_id}/tap_pixel")
+async def tap_pixel(
+    device_id: int,
+    req: MoveToPixelRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_token),
+):
+    """像素坐标 → 标定转换 → 机械臂点击（XY移动 + Z轴下压抬起）"""
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    dev = result.scalar_one_or_none()
+    if not dev:
+        raise HTTPException(404, "Device not found")
+
+    from app.models.calibration import CalibrationData
+    cal_result = await db.execute(
+        select(CalibrationData).where(CalibrationData.device_id == device_id)
+    )
+    cal = cal_result.scalar_one_or_none()
+
+    mapper = CoordinateMapper(cal)
+    try:
+        mx, my = mapper.pixel_to_mech(req.px, req.py)
+    except ValueError as e:
+        raise HTTPException(400, f"坐标转换失败: {e}")
+
+    client = device_manager.get_client(device_id)
+    if not client:
+        settings = get_settings()
+        from app.services.moonraker_client import MoonrakerClient as _MC
+        client = _MC(dev.ip, settings.device_moonraker_port)
+        device_manager._clients[device_id] = client
+
+    tap_error: str | None = None
+    motion = MotionController(client)
+    try:
+        await motion.tap(mx, my)
+    except Exception as e:
+        tap_error = str(e)
+        logger.warning("tap_pixel failed: device=%d err=%s", device_id, e)
+
+    calibrated = cal is not None
+    logger.info(
+        "tap_pixel: device=%d pixel=(%.0f,%.0f) → mech=(%.2f,%.2f) calibrated=%s tapped=%s",
+        device_id, req.px, req.py, mx, my, calibrated, tap_error is None,
+    )
+    msg = f"pixel({req.px:.0f},{req.py:.0f}) → mech({mx:.2f},{my:.2f})mm"
+    if not calibrated:
+        msg += " [未标定]"
+    return {
+        "pixel": {"x": req.px, "y": req.py},
+        "mech": {"x": mx, "y": my},
+        "calibrated": calibrated,
+        "tapped": tap_error is None,
+        "tap_error": tap_error,
         "message": msg,
     }
 

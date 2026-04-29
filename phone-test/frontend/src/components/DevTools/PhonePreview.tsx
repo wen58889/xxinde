@@ -201,17 +201,25 @@ export default function PhonePreview({ onCoordClick }: Props) {
         }
         // 联动模式：点击时机械臂跟随移动
         if (armLinkEnabled && selectedDeviceId) {
-          devicesApi.moveToPixel(selectedDeviceId, coords.x, coords.y)
-            .then(res => {
+          devicesApi.tapPixel(selectedDeviceId, coords.x, coords.y)
+            .then(async res => {
               const coordMsg = `pixel(${coords.x},${coords.y}) → mech(${res.mech.x.toFixed(2)},${res.mech.y.toFixed(2)})mm`
-              if (res.moved) {
-                addLog(`机械臂已移动: ${coordMsg}${res.calibrated ? '' : ' [未标定]'}`, 'success')
+              if (res.tapped) {
+                addLog(`联动点击: ${coordMsg}${res.calibrated ? '' : ' [未标定]'}`, 'success')
               } else {
-                addLog(`坐标转换: ${coordMsg} | 移动失败: ${res.move_error}`, 'error')
+                addLog(`联动点击失败: ${coordMsg} | ${res.tap_error}`, 'error')
               }
+              try {
+                await devicesApi.parkY(selectedDeviceId)
+                addLog('Y轴已归位，等待画面稳定...', 'success')
+              } catch (e) {
+                addLog('Y轴归位失败', 'warn')
+              }
+              await new Promise(r => setTimeout(r, 1500))
+              useDeviceStore.getState().triggerRefresh()
             })
             .catch(err => {
-              addLog(`机械臂联动失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
+              addLog(`联动点击失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
             })
         }
       }
