@@ -16,3 +16,4 @@ paddlepaddle>=2.6.0
 paddleocr>=2.7.0
 scikit-image>=0.21.0
 aiosqlite>=0.20.0
+tencentcloud-sdk-python>=3.0.0

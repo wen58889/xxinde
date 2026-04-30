@@ -34,6 +34,23 @@ class Settings(BaseSettings):
     server_host: str = "0.0.0.0"
     server_port: int = 8080
 
+    # Vision / LLM
+    vllm_base_url: str = "http://192.168.5.8:8000"
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    modelscope_token: str = ""
+    custom_api_base_url: str = ""
+    custom_api_key: str = ""
+    custom_api_model: str = ""
+
+    # TTS
+    tts_engine: str = "edge"      # edge / tencent / aliyun / microsoft / custom
+    tts_secret_id: str = ""       # 腾讯云 SecretId / 阿里 AccessKeyId / 微软 API Key
+    tts_secret_key: str = ""      # 腾讯云 SecretKey / 阿里 AccessKeySecret / 微软 API Region
+    tts_voice_type: int = 1001    # 音色编号（各平台含义不同）
+    tts_custom_url: str = ""      # 自定义TTS服务器URL（局域网自建）
+    tts_custom_key: str = ""      # 自定义TTS服务器认证Key
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

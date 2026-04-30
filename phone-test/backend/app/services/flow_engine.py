@@ -7,6 +7,7 @@ from app.services.moonraker_client import MoonrakerClient
 from app.services.motion import MotionController
 from app.services.screenshot import capture_screenshot
 from app.services.coordinate import CoordinateMapper
+from app.services.tts_service import synthesize_and_play
 from app.vision.manager import vision_manager
 from app.ws_manager import ws_manager
 
@@ -115,11 +116,29 @@ class FlowEngine:
             await asyncio.sleep(step.get("seconds", 1))
         elif action == "tts":
             text = step.get("text", "")
-            if text:
-                logger.info("[%d] TTS: %s", self.device_id, text)
-                # TTS is informational only for now; log the text
+            voice_type = step.get("voice_type", 0)
+            if not text:
+                raise RuntimeError("tts: 'text' field is required")
+            logger.info("[%d] TTS: %s", self.device_id, text)
+            try:
+                result = await synthesize_and_play(text, voice_type)
                 await ws_manager.broadcast("tts", {
-                    "device_id": self.device_id, "text": text,
+                    "device_id": self.device_id,
+                    "text": text,
+                    "audio_url": result["audio_url"],
+                    "duration_ms": result["duration_ms"],
+                    "engine": result["engine"],
+                })
+                logger.info("[%d] TTS OK: %s (%dms)", self.device_id, result["audio_url"], result["duration_ms"])
+            except ValueError as e:
+                logger.warning("[%d] TTS skipped (not configured): %s", self.device_id, e)
+                await ws_manager.broadcast("tts", {
+                    "device_id": self.device_id, "text": text, "error": str(e),
+                })
+            except Exception as e:
+                logger.error("[%d] TTS synthesis failed: %s", self.device_id, e)
+                await ws_manager.broadcast("tts", {
+                    "device_id": self.device_id, "text": text, "error": str(e),
                 })
         else:
             logger.warning("Unknown action: %s", action)

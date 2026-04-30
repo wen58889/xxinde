@@ -20,6 +20,12 @@ class VisionSettingsBody(BaseModel):
     custom_api_base_url: str = ""
     custom_api_key: str = ""
     custom_api_model: str = ""
+    tts_engine: str = ""
+    tts_secret_id: str = ""
+    tts_secret_key: str = ""
+    tts_voice_type: int = 0
+    tts_custom_url: str = ""
+    tts_custom_key: str = ""
 
 
 def _update_env_file(updates: dict[str, str]) -> None:
@@ -58,6 +64,18 @@ async def save_vision_settings(body: VisionSettingsBody, _=Depends(verify_token)
         updates["VLLM_BASE_URL"] = body.vllm_base_url
     if body.modelscope_token:
         updates["MODELSCOPE_TOKEN"] = body.modelscope_token
+    if body.tts_secret_id:
+        updates["TTS_SECRET_ID"] = body.tts_secret_id
+    if body.tts_secret_key:
+        updates["TTS_SECRET_KEY"] = body.tts_secret_key
+    if body.tts_voice_type > 0:
+        updates["TTS_VOICE_TYPE"] = str(body.tts_voice_type)
+    if body.tts_engine:
+        updates["TTS_ENGINE"] = body.tts_engine
+    if body.tts_custom_url:
+        updates["TTS_CUSTOM_URL"] = body.tts_custom_url
+    if body.tts_custom_key:
+        updates["TTS_CUSTOM_KEY"] = body.tts_custom_key
 
     _update_env_file(updates)
     get_settings.cache_clear()
@@ -80,6 +98,10 @@ async def get_vision_settings(_=Depends(verify_token)):
         "anthropic_configured": bool(s.anthropic_api_key),
         "custom_configured": bool(s.custom_api_key and s.custom_api_base_url),
         "modelscope_configured": bool(s.modelscope_token),
+        "tts_configured": bool(s.tts_secret_id and s.tts_secret_key) or bool(s.tts_custom_url),
+        "tts_engine": s.tts_engine,
+        "tts_voice_type": s.tts_voice_type,
+        "tts_custom_url": s.tts_custom_url,
     }
 
 

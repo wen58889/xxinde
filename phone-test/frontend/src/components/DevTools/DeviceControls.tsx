@@ -3,6 +3,7 @@ import CircleIcon from '@mui/icons-material/Circle'
 import { useDeviceStore } from '../../stores/deviceStore'
 import { useLogStore } from '../../stores/logStore'
 import { devicesApi, tasksApi, visionApi } from '../../api/devices'
+import client from '../../api/client'
 import { useState } from 'react'
 import { colors } from '../../theme'
 
@@ -60,8 +61,15 @@ export default function DeviceControls({ onOpenMatchDialog }: Props) {
   const handleSendText = withLoad('send', async () => {
     if (!selectedDeviceId) { addLog('请先选择设备', 'warn'); return }
     if (!ttsText.trim()) { addLog('请输入要发送的文字', 'warn'); return }
-    await tasksApi.natural(`在当前输入框中输入文字: ${ttsText}`, selectedDeviceId)
-    addLog(`文字指令已发送: ${ttsText}`, 'info')
+    try {
+      const res = await client.post('/tts/synthesize', { text: ttsText.trim() }).then(r => r.data)
+      addLog(`TTS语音合成成功: "${ttsText.trim()}" (${res.duration_ms}ms)`, 'success')
+      const audio = new Audio(res.audio_url)
+      audio.play().catch(() => addLog('浏览器播放音频失败', 'warn'))
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail || (e instanceof Error ? e.message : String(e))
+      addLog(`TTS失败: ${detail}`, 'error')
+    }
     setTtsText('')
   })
 

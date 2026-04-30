@@ -1,4 +1,4 @@
-import { Box, Typography, TextField, Button, Paper, Divider, Snackbar, Alert, CircularProgress, InputAdornment, IconButton as MuiIconButton, Chip } from '@mui/material'
+import { Box, Typography, TextField, Button, Paper, Divider, Snackbar, Alert, CircularProgress, InputAdornment, IconButton as MuiIconButton, Chip, Select, MenuItem } from '@mui/material'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import BiotechIcon from '@mui/icons-material/Biotech'
@@ -26,13 +26,19 @@ export default function Settings() {
   const [customApiBaseUrl, setCustomApiBaseUrl] = useState('')
   const [customApiKey, setCustomApiKey] = useState('')
   const [customApiModel, setCustomApiModel] = useState('')
+  const [ttsSecretId, setTtsSecretId] = useState('')
+  const [ttsSecretKey, setTtsSecretKey] = useState('')
+  const [ttsVoiceType, setTtsVoiceType] = useState(1001)
+  const [ttsEngine, setTtsEngine] = useState('tencent')
+  const [ttsCustomUrl, setTtsCustomUrl] = useState('')
+  const [ttsCustomKey, setTtsCustomKey] = useState('')
   const [modelscopeToken, setModelscopeToken] = useState('')
   const [showKeys, setShowKeys] = useState(false)
   const [saving, setSaving] = useState(false)
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' })
   // Status loaded from backend (whether keys are configured)
-  const [apiStatus, setApiStatus] = useState<{ openai: boolean; anthropic: boolean; custom: boolean; modelscope: boolean; vllm_url: string }>({
-    openai: false, anthropic: false, custom: false, modelscope: false, vllm_url: '',
+  const [apiStatus, setApiStatus] = useState<{ openai: boolean; anthropic: boolean; custom: boolean; modelscope: boolean; vllm_url: string; tts: boolean }>({
+    openai: false, anthropic: false, custom: false, modelscope: false, vllm_url: '', tts: false,
   })
 
   const refreshApiStatus = () => {
@@ -47,6 +53,7 @@ export default function Settings() {
           custom: r.data.custom_configured,
           modelscope: (r.data as any).modelscope_configured ?? false,
           vllm_url: r.data.vllm_base_url,
+          tts: (r.data as any).tts_configured ?? false,
         })
       })
       .catch(() => { /* backend may not be running */ })
@@ -70,6 +77,12 @@ export default function Settings() {
         if (s.customApiBaseUrl) setCustomApiBaseUrl(s.customApiBaseUrl)
         if (s.customApiKey) setCustomApiKey(s.customApiKey)
         if (s.customApiModel) setCustomApiModel(s.customApiModel)
+        if (s.ttsSecretId) setTtsSecretId(s.ttsSecretId)
+        if (s.ttsSecretKey) setTtsSecretKey(s.ttsSecretKey)
+        if (s.ttsVoiceType) setTtsVoiceType(s.ttsVoiceType)
+        if (s.ttsEngine) setTtsEngine(s.ttsEngine)
+        if (s.ttsCustomUrl) setTtsCustomUrl(s.ttsCustomUrl)
+        if (s.ttsCustomKey) setTtsCustomKey(s.ttsCustomKey)
       } catch { /* ignore */ }
     }
     refreshApiStatus()
@@ -82,6 +95,7 @@ export default function Settings() {
       openaiKey, anthropicKey, vllmBaseUrl,
       modelscopeToken,
       customApiBaseUrl, customApiKey, customApiModel,
+      ttsSecretId, ttsSecretKey, ttsVoiceType, ttsEngine, ttsCustomUrl, ttsCustomKey,
     }))
     // Sync API credentials to backend
     setSaving(true)
@@ -94,6 +108,12 @@ export default function Settings() {
         custom_api_base_url: customApiBaseUrl,
         custom_api_key: customApiKey,
         custom_api_model: customApiModel,
+        tts_secret_id: ttsSecretId,
+        tts_secret_key: ttsSecretKey,
+        tts_voice_type: ttsVoiceType,
+        tts_engine: ttsEngine,
+        tts_custom_url: ttsCustomUrl,
+        tts_custom_key: ttsCustomKey,
       })
       setSnack({ open: true, msg: '配置已保存', severity: 'success' })
       addLog('配置已保存', 'success')
@@ -120,6 +140,12 @@ export default function Settings() {
     setCustomApiBaseUrl('')
     setCustomApiKey('')
     setCustomApiModel('')
+    setTtsSecretId('')
+    setTtsSecretKey('')
+    setTtsVoiceType(1001)
+    setTtsEngine('tencent')
+    setTtsCustomUrl('')
+    setTtsCustomKey('')
     addLog('已重置为默认配置', 'warn')
   }
 
@@ -258,6 +284,91 @@ export default function Settings() {
             onChange={(e) => setCustomApiModel(e.target.value)}
             fullWidth size="small"
             placeholder="MiniMax-M2.7"
+          />
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="subtitle1" sx={{ mb: 1 }}>TTS 语音合成</Typography>
+        <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+          Edge TTS 免费免配置；也支持腾讯云、阿里云、微软 Azure、自定义局域网TTS
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+          <Chip
+            size="small"
+            icon={ttsEngine === 'edge' ? <CheckCircleIcon /> : apiStatus.tts ? <CheckCircleIcon /> : <CancelIcon />}
+            label={`TTS (${ttsEngine === 'edge' ? 'Edge免费' : ttsEngine === 'tencent' ? '腾讯云' : ttsEngine === 'aliyun' ? '阿里云' : ttsEngine === 'microsoft' ? '微软' : '自定义'})`}
+            color={ttsEngine === 'edge' || apiStatus.tts ? 'success' : 'default'}
+            variant={ttsEngine === 'edge' || apiStatus.tts ? 'filled' : 'outlined'}
+          />
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Select
+            value={ttsEngine}
+            onChange={(e) => setTtsEngine(e.target.value)}
+            size="small"
+            fullWidth
+          >
+            <MenuItem value="edge">Edge TTS（免费免配置）</MenuItem>
+            <MenuItem value="tencent">腾讯云 TTS</MenuItem>
+            <MenuItem value="aliyun">阿里云 TTS</MenuItem>
+            <MenuItem value="microsoft">微软 Azure TTS</MenuItem>
+            <MenuItem value="custom">自定义 TTS 服务器（局域网）</MenuItem>
+          </Select>
+
+          {ttsEngine === 'edge' ? null : ttsEngine === 'custom' ? (
+            <>
+              <TextField
+                label="TTS 服务器 URL"
+                value={ttsCustomUrl}
+                onChange={(e) => setTtsCustomUrl(e.target.value)}
+                fullWidth size="small"
+                placeholder="http://192.168.5.10:9880"
+                helperText="需兼容 /synthesize 接口，接收 {text, voice_type} 返回音频"
+              />
+              <TextField
+                label="认证 Key（可选）"
+                value={ttsCustomKey}
+                onChange={(e) => setTtsCustomKey(e.target.value)}
+                fullWidth size="small"
+                type={showKeys ? 'text' : 'password'}
+                placeholder="Bearer Token"
+              />
+            </>
+          ) : (
+            <>
+              <TextField
+                label={ttsEngine === 'microsoft' ? 'API Key' : 'SecretId / AccessKeyId'}
+                value={ttsSecretId}
+                onChange={(e) => setTtsSecretId(e.target.value)}
+                fullWidth size="small"
+                type={showKeys ? 'text' : 'password'}
+                placeholder={ttsEngine === 'microsoft' ? 'azure-api-key' : ttsEngine === 'aliyun' ? 'LTAI...' : 'AKID...'}
+              />
+              <TextField
+                label={ttsEngine === 'microsoft' ? 'Region' : ttsEngine === 'aliyun' ? 'AccessKeySecret' : 'SecretKey'}
+                value={ttsSecretKey}
+                onChange={(e) => setTtsSecretKey(e.target.value)}
+                fullWidth size="small"
+                type={showKeys ? 'text' : 'password'}
+                placeholder={ttsEngine === 'microsoft' ? 'eastasia' : ttsEngine === 'aliyun' ? 'pOgh...' : 'pOgh...'}
+              />
+            </>
+          )}
+
+          <TextField
+            label="音色编号"
+            value={ttsVoiceType}
+            onChange={(e) => setTtsVoiceType(Number(e.target.value))}
+            fullWidth size="small"
+            type="number"
+            helperText={
+              ttsEngine === 'edge' ? '1001=Xiaoxiao(女) 1002=Yunxi(男) 1003=Yunyang(男) 1004=Xiaoyi(女)' :
+              ttsEngine === 'tencent' ? '1001=智瑜(女) 1002=智聆(男) 1003=智诚(男)' :
+              ttsEngine === 'aliyun' ? '1001=知燕(女) 1002=知妙(女) 1003=知燕(通用)' :
+              ttsEngine === 'microsoft' ? '1001=Xiaoxiao(女) 1002=Yunxi(男) 1003=Yunyang(男)' :
+              '自定义服务器音色编号'
+            }
           />
         </Box>
 
