@@ -1,14 +1,17 @@
 import asyncio
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.auth import verify_token
 from app.config import get_settings
+from app.database import async_session
+from app.models.device import Device
 from app.services.tts_service import synthesize_and_play
 from app.services.n1_player import play_on_device
-from app.services.device_manager import device_manager
 
 logger = logging.getLogger(__name__)
 
@@ -37,15 +40,23 @@ async def tts_synthesize(req: TTSRequest, _=Depends(verify_token)):
         raise HTTPException(502, f"TTS synthesis failed: {e}")
 
     if req.device_id > 0:
-        device = device_manager.devices.get(req.device_id)
-        if device and device.get("ip"):
-            local_path = str(
-                __import__("pathlib").Path("static/tts") / result["audio_url"].split("/")[-1]
-            )
-            asyncio.create_task(_play_and_log(device["ip"], local_path))
-            result["played_on"] = device["ip"]
+        device_ip = await _get_device_ip(req.device_id)
+        if device_ip:
+            local_path = str(Path("static/tts") / result["audio_url"].split("/")[-1])
+            asyncio.create_task(_play_and_log(device_ip, local_path))
+            result["played_on"] = device_ip
 
     return result
+
+
+async def _get_device_ip(device_id: int) -> str | None:
+    try:
+        async with async_session() as db:
+            r = await db.execute(select(Device.ip).where(Device.id == device_id))
+            return r.scalar_one_or_none()
+    except Exception as e:
+        logger.error("Failed to get device IP: %s", e)
+        return None
 
 
 async def _play_and_log(device_ip: str, local_path: str):

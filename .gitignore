@@ -30,6 +30,13 @@ Thumbs.db
 *.db
 *.db-journal
 
+# Environment (secrets)
+.env
+*.env
+
+# Static TTS audio (generated at runtime)
+static/tts/
+
 # Logs
 *.log
 
