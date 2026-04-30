@@ -62,10 +62,12 @@ export default function DeviceControls({ onOpenMatchDialog }: Props) {
     if (!selectedDeviceId) { addLog('请先选择设备', 'warn'); return }
     if (!ttsText.trim()) { addLog('请输入要发送的文字', 'warn'); return }
     try {
-      const res = await client.post('/tts/synthesize', { text: ttsText.trim() }).then(r => r.data)
-      addLog(`TTS语音合成成功: "${ttsText.trim()}" (${res.duration_ms}ms)`, 'success')
-      const audio = new Audio(res.audio_url)
-      audio.play().catch(() => addLog('浏览器播放音频失败', 'warn'))
+      const res = await client.post('/tts/synthesize', {
+        text: ttsText.trim(),
+        device_id: selectedDeviceId,
+      }).then(r => r.data)
+      const playedOn = res.played_on ? ` → ${res.played_on} 播放中` : ''
+      addLog(`TTS: "${ttsText.trim()}" (${res.duration_ms}ms${playedOn})`, 'success')
     } catch (e: any) {
       const detail = e?.response?.data?.detail || (e instanceof Error ? e.message : String(e))
       addLog(`TTS失败: ${detail}`, 'error')

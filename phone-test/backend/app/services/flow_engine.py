@@ -8,6 +8,7 @@ from app.services.motion import MotionController
 from app.services.screenshot import capture_screenshot
 from app.services.coordinate import CoordinateMapper
 from app.services.tts_service import synthesize_and_play
+from app.services.n1_player import play_on_device
 from app.vision.manager import vision_manager
 from app.ws_manager import ws_manager
 
@@ -130,6 +131,9 @@ class FlowEngine:
                     "engine": result["engine"],
                 })
                 logger.info("[%d] TTS OK: %s (%dms)", self.device_id, result["audio_url"], result["duration_ms"])
+                from pathlib import Path
+                local_path = str(Path("static/tts") / result["audio_url"].split("/")[-1])
+                await play_on_device(self.device_ip, local_path)
             except ValueError as e:
                 logger.warning("[%d] TTS skipped (not configured): %s", self.device_id, e)
                 await ws_manager.broadcast("tts", {

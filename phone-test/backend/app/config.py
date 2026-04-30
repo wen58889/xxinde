@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     tts_custom_url: str = ""      # 自定义TTS服务器URL（局域网自建）
     tts_custom_key: str = ""      # 自定义TTS服务器认证Key
 
+    # N1 SSH (for TTS audio playback on device)
+    n1_ssh_user: str = "root"
+    n1_ssh_password: str = "1234"
+    n1_audio_player: str = "ffplay"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
