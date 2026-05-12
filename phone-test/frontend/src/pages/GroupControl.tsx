@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import {
   Box, Button, Checkbox, Slider, Select, MenuItem, Typography,
-  IconButton, CircularProgress,
+  IconButton, CircularProgress, TextField, Dialog, DialogTitle,
+  DialogContent, DialogActions,
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import ScreenRotationIcon from '@mui/icons-material/ScreenRotation'
@@ -20,6 +21,7 @@ import CancelIcon from '@mui/icons-material/Cancel'
 import { useDeviceStore } from '../stores/deviceStore'
 import { useLogStore } from '../stores/logStore'
 import { devicesApi, templatesApi, tasksApi } from '../api/devices'
+import { ensureToken } from '../api/client'
 import { wsClient } from '../api/ws'
 import type { Device } from '../types/device'
 
@@ -154,6 +156,7 @@ export default function GroupControl() {
   const nav = useNavigate()
   const devices = useDeviceStore((s) => s.devices)
   const fetchDevices = useDeviceStore((s) => s.fetchDevices)
+  const setDevices = useDeviceStore((s) => s.setDevices)
   const addLog = useLogStore((s) => s.addLog)
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
@@ -164,7 +167,11 @@ export default function GroupControl() {
   const [pageSize, setPageSize] = useState(50)
   const [scanning, setScanning] = useState(false)
   const [runningIds, setRunningIds] = useState<Set<number>>(new Set())
-  const [taskResults, setTaskResults] = useState<Record<number, 'success' | 'failed'>>({})  
+  const [taskResults, setTaskResults] = useState<Record<number, 'success' | 'failed'>>({})
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addIp, setAddIp] = useState('')
+  const [addHostname, setAddHostname] = useState('')
+  const [adding, setAdding] = useState(false)
 
   const cardWidth = CARD_MIN_W + (viewScale / 100) * (CARD_MAX_W - CARD_MIN_W)
 
@@ -191,13 +198,40 @@ export default function GroupControl() {
 
   const handleScan = async () => {
     setScanning(true)
+    addLog('正在扫描局域网设备...')
     try {
-      await fetchDevices()
-      addLog('设备扫描完成', 'success')
+      await ensureToken()
+      const list = await devicesApi.scan()
+      setDevices(list)
+      const online = list.filter((d) => d.status === 'ONLINE').length
+      addLog(`扫描完成，${list.length} 台设备中 ${online} 台在线`, online > 0 ? 'success' : 'warn')
     } catch (e) {
       addLog(`扫描失败: ${e}`, 'error')
     } finally {
       setScanning(false)
+    }
+  }
+
+  const handleAddDevice = async () => {
+    const ip = addIp.trim()
+    if (!ip || !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) {
+      addLog('请输入正确的IP地址', 'warn')
+      return
+    }
+    setAdding(true)
+    try {
+      await ensureToken()
+      const dev = await devicesApi.create(ip, addHostname.trim() || undefined)
+      addLog(`设备已添加: ${dev.hostname} (${dev.ip})`, 'success')
+      setAddDialogOpen(false)
+      setAddIp('')
+      setAddHostname('')
+      await fetchDevices()
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || String(e)
+      addLog(`添加设备失败: ${msg}`, 'error')
+    } finally {
+      setAdding(false)
     }
   }
 
@@ -407,7 +441,7 @@ export default function GroupControl() {
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 0 }}>
-              <IconButton size="small" sx={{ color: '#7a8a9a', p: 0.3 }}>
+              <IconButton size="small" onClick={() => setAddDialogOpen(true)} sx={{ color: '#7a8a9a', p: 0.3 }}>
                 <AddIcon sx={{ fontSize: 16 }} />
               </IconButton>
               <IconButton size="small" sx={{ color: '#7a8a9a', p: 0.3 }}>
@@ -548,6 +582,26 @@ export default function GroupControl() {
           </Select>
         </Box>
       </Box>
+
+      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontSize: 14, fontWeight: 700 }}>手动添加设备</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '12px !important' }}>
+          <TextField
+            autoFocus size="small" label="IP地址" placeholder="192.168.5.102"
+            value={addIp} onChange={(e) => setAddIp(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAddDevice() }}
+          />
+          <TextField
+            size="small" label="主机名(可选)" placeholder="n102"
+            value={addHostname} onChange={(e) => setAddHostname(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button size="small" onClick={() => setAddDialogOpen(false)}>取消</Button>
+          <Button size="small" variant="contained" onClick={handleAddDevice}
+            disabled={adding || !addIp.trim()}>添加</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

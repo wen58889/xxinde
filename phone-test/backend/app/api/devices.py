@@ -15,7 +15,7 @@ from app.config import get_settings
 from app.models.device import Device, DeviceStatus
 from app.schemas import DeviceOut, MessageOut, VisionRequest
 from app.services.device_manager import device_manager
-from app.services.screenshot import capture_screenshot, ScreenshotError
+from app.services.screenshot import capture_screenshot, ScreenshotError, check_camera
 from app.services.coordinate import CoordinateMapper
 from app.services.motion import MotionController
 from app.services.moonraker_client import _get_shared_session, MoonrakerClient
@@ -86,6 +86,54 @@ async def scan_devices(db: AsyncSession = Depends(get_db), _=Depends(verify_toke
                 dev.ip, settings.device_moonraker_port
             )
     return devices
+
+
+class DeviceCreateRequest(BaseModel):
+    ip: str
+    hostname: str = ""
+
+
+@router.post("", response_model=DeviceOut, status_code=201)
+async def create_device(
+    req: DeviceCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_token),
+):
+    result = await db.execute(select(Device).where(Device.ip == req.ip))
+    existing = result.scalar_one_or_none()
+    if existing:
+        raise HTTPException(409, f"Device with IP {req.ip} already exists (id={existing.id})")
+    hostname = req.hostname or f"n{req.ip.split('.')[-1]}"
+    dev = Device(ip=req.ip, hostname=hostname, status=DeviceStatus.OFFLINE)
+    db.add(dev)
+    await db.commit()
+    await db.refresh(dev)
+    settings = get_settings()
+    device_manager._clients[dev.id] = MoonrakerClient(dev.ip, settings.device_moonraker_port)
+    online = await _probe_moonraker(dev.ip, settings.device_moonraker_port)
+    if online:
+        dev.status = DeviceStatus.ONLINE
+        await db.commit()
+        await db.refresh(dev)
+    logger.info("Device created manually: id=%d ip=%s hostname=%s online=%s", dev.id, dev.ip, dev.hostname, online)
+    return dev
+
+
+@router.delete("/{device_id}", response_model=MessageOut)
+async def delete_device(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_token),
+):
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    dev = result.scalar_one_or_none()
+    if not dev:
+        raise HTTPException(404, "Device not found")
+    await db.delete(dev)
+    await db.commit()
+    device_manager._clients.pop(device_id, None)
+    logger.info("Device deleted: id=%d ip=%s", device_id, dev.ip)
+    return {"message": f"Device {device_id} ({dev.ip}) deleted"}
 
 
 @router.get("", response_model=List[DeviceOut])
@@ -425,3 +473,38 @@ async def snapshot_device(
                         headers={"Cache-Control": "no-cache"})
     except ScreenshotError as e:
         raise HTTPException(502, str(e))
+
+
+@router.get("/{device_id}/diagnose")
+async def diagnose_device(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_token),
+):
+    """诊断设备连通性：Moonraker心跳 + go2rtc摄像头状态"""
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    dev = result.scalar_one_or_none()
+    if not dev:
+        raise HTTPException(404, "Device not found")
+
+    settings = get_settings()
+    diag = {"device_id": device_id, "ip": dev.ip, "status": dev.status.value}
+
+    # Moonraker心跳
+    client = device_manager.get_client(device_id)
+    if not client:
+        client = MoonrakerClient(dev.ip, settings.device_moonraker_port)
+    diag["moonraker"] = {"reachable": False}
+    try:
+        alive = await client.is_alive()
+        diag["moonraker"]["reachable"] = alive
+        if alive:
+            info = await client._request("GET", "/server/info")
+            diag["moonraker"]["klippy_connected"] = info.get("result", {}).get("klippy_connected", False)
+    except Exception as e:
+        diag["moonraker"]["error"] = str(e)
+
+    # go2rtc摄像头
+    diag["camera"] = await check_camera(dev.ip)
+
+    return diag

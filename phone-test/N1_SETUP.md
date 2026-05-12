@@ -13,7 +13,7 @@
     │
     ├── 心跳检测 ────────── N1:7125  Moonraker（G-code 控制机械臂）
     ├── G-code 指令 ─────── N1:7125  /printer/gcode/script
-    ├── 按需拍照 ────────── N1:1984  go2rtc /api/streams/camera0.jpg
+    ├── 按需拍照 ────────── N1:1984  go2rtc /api/frame.jpeg?src=camera0
     ├── TTS 语音 ────────── N1:SSH   scp + mpg123 -o pulse → PulseAudio → 蓝牙音箱
     └── 紧急停止 ────────── N1:7125  /printer/emergency_stop → firmware_restart 恢复
 ```
@@ -495,7 +495,7 @@ systemctl start go2rtc
 ### 10.4 验证
 
 ```bash
-curl -s -o /tmp/shot.jpg http://localhost:1984/api/streams/camera0.jpg
+curl -s -o /tmp/shot.jpg http://localhost:1984/api/frame.jpeg?src=camera0
 file /tmp/shot.jpg  # 期望: JPEG image data
 ```
 
@@ -524,7 +524,7 @@ curl -s http://localhost:7125/server/info | grep -o '"klippy_connected": true' &
 
 echo ""
 echo "=== 拍照 ==="
-curl -s -o /tmp/verify.jpg http://localhost:1984/api/streams/camera0.jpg && echo "拍照: OK" || echo "拍照: 失败"
+curl -s -o /tmp/verify.jpg http://localhost:1984/api/frame.jpeg?src=camera0 && echo "拍照: OK" || echo "拍照: 失败"
 ```
 
 ---
@@ -539,7 +539,7 @@ curl -s --connect-timeout 3 http://$N1_IP:7125/server/info \
   && echo "Moonraker OK" || echo "Moonraker FAIL"
 
 # 截图
-curl -s --connect-timeout 3 -o /dev/null http://$N1_IP:1984/api/streams/camera0.jpg \
+curl -s --connect-timeout 3 -o /dev/null http://$N1_IP:1984/api/frame.jpeg?src=camera0 \
   && echo "go2rtc OK" || echo "go2rtc FAIL"
 
 # SSH（TTS 播放通道）

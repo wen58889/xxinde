@@ -101,7 +101,7 @@ G4 P1000     ; 等待 1000ms（长按）
 
 每台 N1 上还运行 **go2rtc** 服务（端口 `1984`），通过摄像头拍摄手机屏幕。
 
-截图 URL：`http://{设备IP}:1984/api/streams/camera0.jpg`
+截图 URL：`http://{设备IP}:1984/api/frame.jpeg?src=camera0`
 
 期望分辨率：**1280 × 720**
 

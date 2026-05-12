@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 X_MIN, X_MAX = 0.0, 150.0
 Y_MIN, Y_MAX = 0.0, 150.0
-Z_MIN, Z_MAX = -1.0, 6.0
+Z_MIN, Z_MAX = -1.0, 10.0
 Z_SAFE = 3.0
 XY_MAX_FEED = 9000
 Z_MAX_FEED = 9000

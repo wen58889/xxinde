@@ -75,7 +75,7 @@
 
 ### 取图方案
 
-`go2rtc` HTTP API：`http://{N1_IP}:1984/api/streams/camera0.jpg` → JPEG 1280×720
+`go2rtc` HTTP API：`http://{N1_IP}:1984/api/frame.jpeg?src=camera0` → JPEG 1280×720
 
 ---
 
@@ -271,7 +271,7 @@ steps:
 
 **网络**：固定IP 192.168.1.101~122，主机名 nb-01~22，端口 7125(Moonraker) + 1984(go2rtc)
 
-**截图**：`http://{N1_IP}:1984/api/streams/camera0.jpg` → JPEG 1280×720
+**截图**：`http://{N1_IP}:1984/api/frame.jpeg?src=camera0` → JPEG 1280×720
 
 **无人值守加固**：
 - systemd自动重启（Restart=always）

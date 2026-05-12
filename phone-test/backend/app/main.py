@@ -9,7 +9,7 @@ from app.database import engine, Base
 from app.services.device_manager import device_manager
 from app.services.moonraker_client import close_shared_session
 from app.vision.ocr_service import ocr_service
-from app.api import devices, tasks, templates, calibration, emergency, ws, auth, vision_test, settings_api, tts_api
+from app.api import devices, tasks, templates, calibration, emergency, ws, auth, vision_test, settings_api, tts_api, agent_api
 from app.api import templates_icons
 
 logging.basicConfig(
@@ -68,6 +68,7 @@ app.include_router(ws.router)
 app.include_router(vision_test.router)
 app.include_router(settings_api.router)
 app.include_router(tts_api.router)
+app.include_router(agent_api.router)
 
 import os
 os.makedirs("static/tts", exist_ok=True)

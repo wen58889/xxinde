@@ -8,21 +8,80 @@ from app.services.moonraker_client import _get_shared_session
 
 logger = logging.getLogger(__name__)
 
-TIMEOUT_SECONDS = 5
+TIMEOUT_SECONDS = 8
 MAX_RETRIES = 3          # go2rtc 首次取帧可能 502，多重试几次
-RETRY_DELAY = 0.8        # 502 时等待后重试
+RETRY_DELAY = 1.5        # 502 时等待后重试 (ffmpeg exec模式需要更长时间)
 EXPECTED_WIDTH = 1280
 EXPECTED_HEIGHT = 720
+
+
+async def check_camera(device_ip: str) -> dict:
+    """检查N1设备摄像头服务连通性，返回诊断信息"""
+    settings = get_settings()
+    port = settings.device_camera_port
+    url = f"http://{device_ip}:{port}/api/streams"
+    result = {"go2rtc_reachable": False, "streams": [], "snapshot_ok": False}
+    session = await _get_shared_session()
+    try:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=3)) as resp:
+            if resp.status == 200:
+                result["go2rtc_reachable"] = True
+                data = await resp.json()
+                result["streams"] = list(data.keys()) if isinstance(data, dict) else []
+    except Exception:
+        pass
+    stream_name = "camera0"
+    if result["streams"]:
+        for pref in ("camera0", "camera1"):
+            if pref in result["streams"]:
+                stream_name = pref
+                break
+        else:
+            stream_name = result["streams"][0]
+    snap_url = f"http://{device_ip}:{port}/api/frame.jpeg?src={stream_name}"
+    try:
+        async with session.get(snap_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            if resp.status == 200:
+                ct = resp.headers.get("Content-Type", "")
+                result["snapshot_ok"] = "image" in ct
+                result["stream_used"] = stream_name
+            else:
+                result["snapshot_status"] = resp.status
+    except Exception as e:
+        result["snapshot_error"] = str(e)
+    return result
 
 
 class ScreenshotError(Exception):
     pass
 
 
+async def _get_camera_stream(device_ip: str, port: int) -> str:
+    """动态获取go2rtc中的摄像头流名，优先camera0/camera1，回退第一个可用流"""
+    session = await _get_shared_session()
+    try:
+        async with session.get(
+            f"http://{device_ip}:{port}/api/streams",
+            timeout=aiohttp.ClientTimeout(total=3),
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                streams = list(data.keys()) if isinstance(data, dict) else []
+                for pref in ("camera0", "camera1"):
+                    if pref in streams:
+                        return pref
+                if streams:
+                    return streams[0]
+    except Exception:
+        pass
+    return "camera0"
+
+
 async def capture_screenshot(device_ip: str) -> bytes:
     settings = get_settings()
-    # go2rtc 按需取帧接口（官方标准）
-    url = f"http://{device_ip}:{settings.device_camera_port}/api/frame.jpeg?src=camera0"
+    port = settings.device_camera_port
+    stream_name = await _get_camera_stream(device_ip, port)
+    url = f"http://{device_ip}:{port}/api/frame.jpeg?src={stream_name}"
 
     last_error: Exception | None = None
     for attempt in range(1, MAX_RETRIES + 1):

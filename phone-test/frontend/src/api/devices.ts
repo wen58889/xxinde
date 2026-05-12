@@ -3,7 +3,10 @@ import { Device } from '../types/device'
 
 export const devicesApi = {
   list: () => client.get<Device[]>('/devices').then(r => r.data),
-  scan: () => client.post<Device[]>('/devices/scan').then(r => r.data),
+  scan: () => client.post<Device[]>('/devices/scan', undefined, { timeout: 60000 }).then(r => r.data),
+  create: (ip: string, hostname?: string) =>
+    client.post<Device>('/devices', { ip, hostname: hostname || '' }).then(r => r.data),
+  delete: (id: number) => client.delete(`/devices/${id}`).then(r => r.data),
   status: (id: number) => client.get<Device>(`/devices/${id}/status`).then(r => r.data),
   snapshot: (id: number) => `/api/v1/devices/${id}/snapshot?t=${Date.now()}`,
   home: (id: number) => client.post(`/devices/${id}/home`),
@@ -44,6 +47,14 @@ export const devicesApi = {
     ).then(r => r.data),
   parkY: (id: number) =>
     client.post(`/devices/${id}/park_y`).then(r => r.data),
+  diagnose: (id: number) =>
+    client.get<{
+      device_id: number
+      ip: string
+      status: string
+      moonraker: { reachable: boolean; klippy_connected?: boolean; error?: string }
+      camera: { go2rtc_reachable: boolean; streams: string[]; snapshot_ok: boolean; snapshot_status?: number; snapshot_error?: string }
+    }>(`/devices/${id}/diagnose`).then(r => r.data),
 }
 
 export const templatesApi = {

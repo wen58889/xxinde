@@ -67,13 +67,15 @@ export default function PhonePreview({ onCoordClick }: Props) {
   }, [saveDialogOpen])
 
   // 仅在设备切换或点击"刷新图像"时取一帧，不自动轮询
+  // 失败时自动重试一次（go2rtc首次请求可能502）
   useEffect(() => {
     if (!selectedDeviceId) { setImgSrc(''); setCurrentFrameSrc(''); return }
 
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8000)
+    const timer = setTimeout(() => controller.abort(), 12000)
 
     setFetchLoading(true)
+    let retryCount = 0
     const fetchOnce = async () => {
       const token = localStorage.getItem('token') || ''
       try {
@@ -82,7 +84,13 @@ export default function PhonePreview({ onCoordClick }: Props) {
           signal: controller.signal,
         })
         if (!res.ok) {
-          addLog(`刷新图像失败: HTTP ${res.status}`, 'error')
+          if (res.status === 502 && retryCount < 1) {
+            retryCount++
+            addLog('go2rtc流未就绪(502)，2秒后重试...', 'warn')
+            await new Promise(r => setTimeout(r, 2000))
+            return fetchOnce()
+          }
+          addLog(`刷新图像失败: HTTP ${res.status}${res.status === 502 ? ' (go2rtc流未就绪，检查N1设备go2rtc服务)' : ''}`, 'error')
           return
         }
         const blob = await res.blob()
@@ -96,7 +104,7 @@ export default function PhonePreview({ onCoordClick }: Props) {
         addLog('刷新图像: 已获取最新画面', 'success')
       } catch (err: unknown) {
         if (err instanceof Error && err.name === 'AbortError') {
-          addLog('刷新图像超时 (>8s)，请检查设备连接', 'error')
+          addLog('刷新图像超时 (>12s)，请检查设备连接和go2rtc服务', 'error')
         } else {
           addLog(`刷新图像失败: ${err}`, 'error')
         }
@@ -215,7 +223,7 @@ export default function PhonePreview({ onCoordClick }: Props) {
               } catch (e) {
                 addLog('Y轴归位失败', 'warn')
               }
-              await new Promise(r => setTimeout(r, 1500))
+              await new Promise(r => setTimeout(r, 2500))
               useDeviceStore.getState().triggerRefresh()
             })
             .catch(err => {
