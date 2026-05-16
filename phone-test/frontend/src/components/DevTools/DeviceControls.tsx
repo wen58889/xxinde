@@ -107,8 +107,19 @@ export default function DeviceControls({ onOpenMatchDialog }: Props) {
   const handleHome = withLoad('home', async () => {
     if (!selectedDeviceId) { addLog('请先选择设备', 'warn'); return }
     addLog('发送 G28 归位指令...', 'info')
-    await devicesApi.home(selectedDeviceId)
-    addLog('机械臂归位完成 (G28)', 'success')
+    try {
+      await devicesApi.home(selectedDeviceId)
+      addLog('机械臂归位完成 (G28)', 'success')
+    } catch (e: unknown) {
+      const err: any = e
+      const status = err?.response?.status
+      const msg = err?.response?.data?.detail || err?.message || String(e)
+      if (status === 502 && (String(msg).includes('shutdown') || String(msg).includes('tmcuart') || String(msg).includes('Homing'))) {
+        addLog('MCU通信异常导致归位失败，系统已自动恢复并重试，请再次点击复位', 'warn')
+      } else {
+        throw e
+      }
+    }
   })
 
   const handleReboot = withLoad('reboot', async () => {

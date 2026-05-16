@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.services.device_manager import device_manager
 from app.services.moonraker_client import close_shared_session
+from app.services.ssh_tool import get_ssh_tool
 from app.vision.ocr_service import ocr_service
 from app.api import devices, tasks, templates, calibration, emergency, ws, auth, vision_test, settings_api, tts_api, agent_api
 from app.api import templates_icons
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     await device_manager.stop_heartbeat()
+    await get_ssh_tool().close_all()
     await close_shared_session()
     await engine.dispose()
 

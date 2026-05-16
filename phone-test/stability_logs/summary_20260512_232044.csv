@@ -1,0 +1,3 @@
+时间戳,设备IP,状态,MCU状态,服务状态,摄像头,响应时间ms,错误信息
+2026-05-12 23:20:44,192.168.5.101,DEGRADED,parse_error,状态:parse_error,error,156,MCU:parse_error;CAM:DOWN;FLUIDD:DOWN;
+2026-05-12 23:20:44,192.168.5.102,UNHEALTHY,parse_error,状态:parse_error,error,120,MCU:parse_error;CAM:DOWN;

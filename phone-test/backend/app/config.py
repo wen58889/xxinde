@@ -56,6 +56,31 @@ class Settings(BaseSettings):
     n1_ssh_password: str = "1234"
     n1_audio_player: str = "ffplay"
 
+    # Connection pool
+    connection_pool_limit: int = 50
+    connection_pool_limit_per_host: int = 4
+    connection_pool_ttl_dns_cache: int = 300
+    connection_pool_keepalive: int = 30
+
+    # Heartbeat
+    heartbeat_interval: float = 5.0
+    heartbeat_max_concurrent: int = 20
+    heartbeat_timeout: float = 2.0
+    heartbeat_offline_skip_rounds: int = 4
+
+    # SSH remote tool
+    ssh_connect_timeout: float = 5.0
+    ssh_command_timeout: float = 10.0
+    ssh_max_retries: int = 2
+
+    # Recovery strategy
+    recovery_max_wait: float = 30.0
+    recovery_startup_wait: float = 10.0
+    recovery_window: float = 300.0
+    recovery_max_attempts: int = 3
+    recovery_firmware_timeout: float = 5.0
+    recovery_server_restart_timeout: float = 10.0
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

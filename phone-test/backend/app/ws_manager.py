@@ -28,14 +28,20 @@ class WSManager:
     async def broadcast(self, event: str, data: dict):
         message = json.dumps({"event": event, "data": data}, ensure_ascii=False, default=str)
         async with self._lock:
-            stale = []
-            for ws in self._connections:
-                try:
-                    await ws.send_text(message)
-                except Exception:
-                    stale.append(ws)
-            for ws in stale:
-                self._connections.remove(ws)
+            targets = list(self._connections)
+        stale = []
+        for ws in targets:
+            try:
+                await asyncio.wait_for(ws.send_text(message), timeout=2.0)
+            except asyncio.TimeoutError:
+                stale.append(ws)
+            except Exception:
+                stale.append(ws)
+        if stale:
+            async with self._lock:
+                for ws in stale:
+                    if ws in self._connections:
+                        self._connections.remove(ws)
 
 
 ws_manager = WSManager()

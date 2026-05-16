@@ -339,3 +339,89 @@ echo "  5. 从总控服务器端验证:"
 echo "       curl -s http://$N1_IP:7125/server/info"
 echo ""
 log_info "配置信息已保存到 /root/n1_network_info.txt"
+
+####################################################################################
+# WiFi稳定性加固
+####################################################################################
+log_info "WiFi稳定性加固..."
+
+NM_CONN=$(nmcli -t -f NAME,TYPE con show --active 2>/dev/null | grep -i wireless | head -1 | cut -d: -f1)
+if [ -n "$NM_CONN" ]; then
+    # L1: WiFi省电模式
+    nmcli con modify "$NM_CONN" 802-11-wireless.powersave 2 2>/dev/null || true
+    log_info "  L1: WiFi省电=2(适度)"
+
+    WIFI_DEV=$(nmcli -t -f DEVICE,TYPE dev status 2>/dev/null | grep -i wifi | head -1 | cut -d: -f1)
+    if [ -n "$WIFI_DEV" ]; then
+        iw dev "$WIFI_DEV" set power_save off 2>/dev/null && log_info "  L1: $WIFI_DEV 省电已关闭" || true
+    fi
+
+    # L2: 自动重连加固
+    nmcli con modify "$NM_CONN" connection.autoconnect-priority 10 2>/dev/null || true
+    nmcli con modify "$NM_CONN" connection.autoconnect-retries 0 2>/dev/null || true
+    log_info "  L2: 自动重连优先级=10, 无限重试"
+else
+    log_warn "  未检测到活跃WiFi连接"
+fi
+
+# L3: NM dispatcher脚本 (连接时关闭省电+确保USB活跃)
+mkdir -p /etc/NetworkManager/dispatcher.d
+cat > /etc/NetworkManager/dispatcher.d/99-wifi-stability.sh << 'DISP'
+#!/bin/bash
+IFACE="$1"
+ACTION="$2"
+if [ "$ACTION" = "up" ]; then
+    iw dev "$IFACE" set power_save off 2>/dev/null || true
+    for usbdev in /sys/bus/usb/devices/*/power/control; do
+        echo "on" > "$usbdev" 2>/dev/null || true
+    done
+fi
+DISP
+chmod +x /etc/NetworkManager/dispatcher.d/99-wifi-stability.sh 2>/dev/null || true
+log_info "  L3: WiFi dispatcher已安装 (连接时关闭省电+确保USB活跃)"
+
+# L4: wifi-watchdog服务 (每30s ping网关, 5次失败重启WiFi)
+cat > /usr/local/bin/wifi-watchdog.sh << 'WDOG'
+#!/bin/bash
+CHECK_INTERVAL=30
+FAIL_COUNT=0
+MAX_FAILS=5
+GATEWAY=$(ip route | grep default | awk '{print $3}' | head -1)
+
+while true; do
+    if ping -c 1 -W 2 "$GATEWAY" &>/dev/null; then
+        FAIL_COUNT=0
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        if [ $FAIL_COUNT -ge $MAX_FAILS ]; then
+            logger -t wifi-watchdog "网关$GATEWAY不可达(${FAIL_COUNT}次), 重启WiFi"
+            nmcli radio wifi off 2>/dev/null
+            sleep 3
+            nmcli radio wifi on 2>/dev/null
+            FAIL_COUNT=0
+        fi
+    fi
+    sleep $CHECK_INTERVAL
+done
+WDOG
+chmod +x /usr/local/bin/wifi-watchdog.sh 2>/dev/null || true
+
+cat > /etc/systemd/system/wifi-watchdog.service << 'EOF'
+[Unit]
+Description=WiFi Connectivity Watchdog
+After=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/wifi-watchdog.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable wifi-watchdog 2>/dev/null || true
+systemctl start wifi-watchdog 2>/dev/null || true
+log_info "  L4: wifi-watchdog (每30s检测, 5次失败重启WiFi)"
+log_info "WiFi 4层防线已部署"

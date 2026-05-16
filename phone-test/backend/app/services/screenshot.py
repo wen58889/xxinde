@@ -9,10 +9,13 @@ from app.services.moonraker_client import _get_shared_session
 logger = logging.getLogger(__name__)
 
 TIMEOUT_SECONDS = 8
-MAX_RETRIES = 3          # go2rtc 首次取帧可能 502，多重试几次
-RETRY_DELAY = 1.5        # 502 时等待后重试 (ffmpeg exec模式需要更长时间)
+MAX_RETRIES = 3
+RETRY_DELAY = 0.5
 EXPECTED_WIDTH = 1280
 EXPECTED_HEIGHT = 720
+
+_stream_cache: dict[str, str] = {}
+_stream_cache_lock = asyncio.Lock()
 
 
 async def check_camera(device_ip: str) -> dict:
@@ -57,23 +60,28 @@ class ScreenshotError(Exception):
 
 
 async def _get_camera_stream(device_ip: str, port: int) -> str:
-    """动态获取go2rtc中的摄像头流名，优先camera0/camera1，回退第一个可用流"""
+    cached = _stream_cache.get(device_ip)
+    if cached:
+        return cached
     session = await _get_shared_session()
     try:
         async with session.get(
             f"http://{device_ip}:{port}/api/streams",
-            timeout=aiohttp.ClientTimeout(total=3),
+            timeout=aiohttp.ClientTimeout(total=2),
         ) as resp:
             if resp.status == 200:
                 data = await resp.json()
                 streams = list(data.keys()) if isinstance(data, dict) else []
                 for pref in ("camera0", "camera1"):
                     if pref in streams:
+                        _stream_cache[device_ip] = pref
                         return pref
                 if streams:
+                    _stream_cache[device_ip] = streams[0]
                     return streams[0]
     except Exception:
         pass
+    _stream_cache[device_ip] = "camera0"
     return "camera0"
 
 

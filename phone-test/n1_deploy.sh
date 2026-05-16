@@ -163,14 +163,35 @@ fi
 ####################################################################################
 log_step "Step 2/11: 安装基础依赖"
 
-apt update -qq
+# 强制apt使用IPv4 (部分N1网络IPv6不通)
+mkdir -p /etc/apt/apt.conf.d
+echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 2>/dev/null || true
+
+apt update -qq 2>&1 | tail -3 || log_warn "apt update失败(可能无外网，部分依赖可能缺失)"
 apt install -y \
     git python3 python3-pip python3-venv python3-dev wget curl v4l-utils \
     avahi-daemon \
     bluez bluez-tools \
     pulseaudio pulseaudio-module-bluetooth pulseaudio-utils \
     mpg123 ffmpeg \
-    2>&1 | tail -5
+    gcc-arm-none-eabi libnewlib-arm-none-eabi \
+    libsodium23 pkg-config libusb-1.0-0 libusb-1.0-dev \
+    network-manager iw wireless-tools rfkill \
+    jq \
+    2>&1 | tail -5 || log_warn "部分依赖安装失败(无外网)，继续部署"
+
+# 验证关键依赖
+for cmd in python3 git ffmpeg; do
+    if ! command -v $cmd &>/dev/null; then
+        log_error "关键依赖 $cmd 未安装! 请确保有外网访问后重新运行"
+        exit 1
+    fi
+done
+if command -v arm-none-eabi-gcc &>/dev/null; then
+    log_info "ARM gcc已安装: $(arm-none-eabi-gcc --version 2>&1 | head -1)"
+else
+    log_warn "gcc-arm-none-eabi未安装，将跳过MCU固件编译(需要外网)"
+fi
 
 log_info "基础依赖安装完成"
 
@@ -227,6 +248,93 @@ fi
 # 启动avahi-daemon (mDNS设备发现)
 systemctl enable avahi-daemon 2>/dev/null || true
 systemctl start avahi-daemon 2>/dev/null || true
+
+####################################################################################
+# WiFi稳定性加固 (4层防线 — 交付特斯拉超级工厂级)
+####################################################################################
+log_info "WiFi稳定性加固 (4层防线)..."
+
+# L1: WiFi省电模式关闭 (powersave=2适度 + iw power_save off)
+NM_CONN=$(nmcli -t -f NAME,TYPE con show --active 2>/dev/null | grep -i wireless | head -1 | cut -d: -f1)
+if [ -n "$NM_CONN" ]; then
+    nmcli con modify "$NM_CONN" 802-11-wireless.powersave 2 2>/dev/null || true
+    log_info "  L1: WiFi省电=2(适度)"
+    WIFI_DEV=$(nmcli -t -f DEVICE,TYPE dev status 2>/dev/null | grep -i wifi | head -1 | cut -d: -f1)
+    if [ -n "$WIFI_DEV" ]; then
+        iw dev "$WIFI_DEV" set power_save off 2>/dev/null && log_info "  L1: $WIFI_DEV power_save=off" || true
+    fi
+else
+    log_info "  L1: 未检测到WiFi连接(以太网设备)"
+fi
+
+# L2: WiFi自动重连加固 (优先级10 + 无限重试)
+if [ -n "$NM_CONN" ]; then
+    nmcli con modify "$NM_CONN" connection.autoconnect-priority 10 2>/dev/null || true
+    nmcli con modify "$NM_CONN" connection.autoconnect-retries 0 2>/dev/null || true
+    log_info "  L2: 自动重连优先级=10, 无限重试"
+fi
+
+# L3: NM dispatcher脚本 (连接时关闭省电+确保USB活跃)
+mkdir -p /etc/NetworkManager/dispatcher.d
+cat > /etc/NetworkManager/dispatcher.d/99-wifi-stability.sh << 'DISP'
+#!/bin/bash
+IFACE="$1"
+ACTION="$2"
+if [ "$ACTION" = "up" ]; then
+    iw dev "$IFACE" set power_save off 2>/dev/null || true
+    for usbdev in /sys/bus/usb/devices/*/power/control; do
+        echo "on" > "$usbdev" 2>/dev/null || true
+    done
+fi
+DISP
+chmod +x /etc/NetworkManager/dispatcher.d/99-wifi-stability.sh 2>/dev/null || true
+log_info "  L3: NM dispatcher (连接时关闭省电+确保USB活跃)"
+
+# L4: wifi-watchdog服务 (每30s ping网关, 5次失败重启WiFi)
+cat > /usr/local/bin/wifi-watchdog.sh << 'WDOG'
+#!/bin/bash
+CHECK_INTERVAL=30
+FAIL_COUNT=0
+MAX_FAILS=5
+GATEWAY=$(ip route | grep default | awk '{print $3}' | head -1)
+
+while true; do
+    if ping -c 1 -W 2 "$GATEWAY" &>/dev/null; then
+        FAIL_COUNT=0
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        if [ $FAIL_COUNT -ge $MAX_FAILS ]; then
+            logger -t wifi-watchdog "网关$GATEWAY不可达(${FAIL_COUNT}次), 重启WiFi"
+            nmcli radio wifi off 2>/dev/null
+            sleep 3
+            nmcli radio wifi on 2>/dev/null
+            FAIL_COUNT=0
+        fi
+    fi
+    sleep $CHECK_INTERVAL
+done
+WDOG
+chmod +x /usr/local/bin/wifi-watchdog.sh 2>/dev/null || true
+
+cat > /etc/systemd/system/wifi-watchdog.service << 'EOF'
+[Unit]
+Description=WiFi Connectivity Watchdog
+After=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/wifi-watchdog.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable wifi-watchdog 2>/dev/null || true
+systemctl start wifi-watchdog 2>/dev/null || true
+log_info "  L4: wifi-watchdog (每30s检测, 5次失败重启WiFi)"
+log_info "WiFi 4层防线已部署"
 
 ####################################################################################
 # 4. 蓝牙音箱配置
@@ -374,11 +482,28 @@ fi
 ####################################################################################
 log_step "Step 6/11: 安装 Klipper"
 
+KLIPPER_COMMIT="35ace5297"
+MOONRAKER_COMMIT="1ed102e"
+
 if [ ! -d "$KLIPPER_DIR" ]; then
-    log_info "克隆 Klipper..."
-    git clone --depth 1 https://github.com/Klipper3d/klipper.git "$KLIPPER_DIR" 2>&1 | tail -3
+    log_info "克隆 Klipper (锁定commit: $KLIPPER_COMMIT)..."
+    git clone https://github.com/Klipper3d/klipper.git "$KLIPPER_DIR" 2>&1 | tail -3
+    cd "$KLIPPER_DIR"
+    git checkout "$KLIPPER_COMMIT" 2>&1 | tail -3
+    log_info "Klipper 版本: $(git log --oneline -1)"
+    cd /
 else
-    log_info "Klipper 目录已存在，跳过克隆"
+    log_info "Klipper 目录已存在，检查版本..."
+    cd "$KLIPPER_DIR"
+    CURRENT_COMMIT=$(git log --oneline -1 2>/dev/null | awk '{print $1}')
+    if [ "$CURRENT_COMMIT" != "$KLIPPER_COMMIT" ]; then
+        log_warn "当前Klipper commit($CURRENT_COMMIT)与锁定版本($KLIPPER_COMMIT)不一致"
+        log_warn "切换到锁定版本..."
+        git fetch origin 2>/dev/null || true
+        git checkout "$KLIPPER_COMMIT" 2>&1 | tail -3
+    fi
+    log_info "Klipper 版本: $(git log --oneline -1)"
+    cd /
 fi
 
 if [ ! -d "$KLIPPY_ENV" ]; then
@@ -404,13 +529,14 @@ if [ "$MCU_SERIAL" = "AUTO_DETECT" ]; then
     fi
 fi
 
-# 写入 printer.cfg (与N1实际配置完全一致)
+# 写入 printer.cfg (与101/102实际验证通过的配置完全一致)
 log_info "写入 printer.cfg ..."
 cat > "$PRINTER_DATA/config/printer.cfg" << PRINTERCFG
 ####################################################################################
 # CoreXY机械臂控制系统 - 手机屏幕点击/滑动自动化
 # 硬件: SKR Pico V1.0 + TMC2209 + CoreXY
-# 行程: X=150mm, Y=150mm, Z=10mm
+# 行程: X=150mm, Y=150mm, Z=10mm (无限位, 纯自由移动)
+# 注意: 此配置已在101/102上验证通过，请勿随意修改
 ####################################################################################
 
 [mcu]
@@ -428,19 +554,20 @@ max_velocity: 300
 max_accel: 3000
 max_z_velocity: 5
 max_z_accel: 100
+square_corner_velocity: 5.0
 
+# ==================== X轴 ====================
 [stepper_x]
 step_pin: gpio11
 dir_pin: !gpio10
 enable_pin: !gpio12
+rotation_distance: 20
 microsteps: 16
-rotation_distance: 40
-endstop_pin: gpio4
-position_endstop: 150
-position_min: 0
+endstop_pin: ^gpio4
+position_endstop: 0
 position_max: 150
 homing_speed: 50
-homing_retract_dist: 5
+homing_retract_dist: 3
 
 [tmc2209 stepper_x]
 uart_pin: gpio9
@@ -450,24 +577,19 @@ run_current: 0.8
 hold_current: 0.5
 sense_resistor: 0.110
 stealthchop_threshold: 999999
-driver_TBL: 2
-driver_TOFF: 3
-driver_HSTRT: 0
-driver_HEND: 3
-interpolate: True
 
+# ==================== Y轴 ====================
 [stepper_y]
 step_pin: gpio6
-dir_pin: gpio5
-enable_pin: !gpio12
+dir_pin: !gpio5
+enable_pin: !gpio7
+rotation_distance: 20
 microsteps: 16
-rotation_distance: 40
-endstop_pin: gpio3
-position_endstop: 150
-position_min: 0
+endstop_pin: ^gpio3
+position_endstop: 0
 position_max: 150
 homing_speed: 50
-homing_retract_dist: 5
+homing_retract_dist: 3
 
 [tmc2209 stepper_y]
 uart_pin: gpio9
@@ -477,12 +599,8 @@ run_current: 0.8
 hold_current: 0.5
 sense_resistor: 0.110
 stealthchop_threshold: 999999
-driver_TBL: 2
-driver_TOFF: 3
-driver_HSTRT: 0
-driver_HEND: 3
-interpolate: True
 
+# ==================== Z轴（无限位, 纯自由移动） ====================
 [stepper_z]
 step_pin: gpio19
 dir_pin: !gpio28
@@ -505,15 +623,18 @@ run_current: 0.9
 hold_current: 0.6
 sense_resistor: 0.110
 stealthchop_threshold: 999999
-driver_TBL: 2
-driver_TOFF: 3
-driver_HSTRT: 0
-driver_HEND: 3
-interpolate: True
+
+# ==================== 基础功能 ====================
+[fan]
+pin: gpio17
+
+[idle_timeout]
+timeout: 28800
 
 [virtual_sdcard]
 path: $PRINTER_DATA/gcodes
 
+[respond]
 [display_status]
 [pause_resume]
 
@@ -521,7 +642,7 @@ path: $PRINTER_DATA/gcodes
 enable_force_move: True
 
 [gcode_macro G28]
-description: 覆盖标准G28
+description: 覆盖标准G28 (Z轴无限位, 仅归X/Y后设Z=0)
 rename_existing: G28.0
 gcode:
     {% if 'X' in params or 'Y' in params or 'Z' in params %}
@@ -540,11 +661,56 @@ PRINTERCFG
 
 log_info "printer.cfg 已写入 (MCU serial: $MCU_SERIAL)"
 
-# Klipper systemd 服务
+# 编译Klipper MCU固件 (RP2040)
+if command -v arm-none-eabi-gcc &>/dev/null; then
+    log_info "编译Klipper RP2040固件..."
+    cd "$KLIPPER_DIR"
+    # 配置RP2040
+    make menuconfig KCONFIG_CONFIG=.config.rp2040 << 'MENUEOF' 2>/dev/null || true
+MENUEOF
+    # 使用scripts/config设置RP2040
+    scripts/config --set-str CONFIG_MCU rp2040 2>/dev/null || true
+    scripts/config --enable CONFIG_USB 2>/dev/null || true
+    scripts/config --disable CONFIG_SERIAL 2>/dev/null || true
+    # 编译
+    if make -j4 2>&1 | tail -5; then
+        if [ -f out/klipper.elf.uf2 ]; then
+            log_info "Klipper固件编译成功: out/klipper.elf.uf2"
+            # 自动刷写 (如果MCU已连接)
+            if [ "$MCU_SERIAL" != "/dev/serial/by-id/REPLACE_ME" ] && [ -e "$MCU_SERIAL" ]; then
+                log_ask "是否立即刷写固件到RP2040? [Y/n]:"
+                read -r FLASH_YN
+                FLASH_YN=${FLASH_YN:-Y}
+                if [ "$FLASH_YN" = "Y" ] || [ "$FLASH_YN" = "y" ]; then
+                    log_info "刷写固件 (请等待RP2040重启)..."
+                    make flash FLASH_DEVICE="$MCU_SERIAL" 2>&1 | tail -5 || \
+                        log_warn "刷写失败，可手动执行: cd /root/klipper && make flash FLASH_DEVICE=$MCU_SERIAL"
+                    sleep 5
+                fi
+            else
+                log_warn "MCU未连接，跳过自动刷写。连接MCU后手动执行:"
+                log_warn "  cd /root/klipper && make flash FLASH_DEVICE=/dev/serial/by-id/xxx"
+            fi
+        else
+            log_warn "固件编译未生成uf2文件"
+        fi
+    else
+        log_warn "固件编译失败，可稍后手动编译: cd /root/klipper && make menuconfig && make -j4"
+    fi
+    cd /
+else
+    log_warn "跳过MCU固件编译(无ARM gcc)。部署后手动编译:"
+    log_warn "  apt install -y gcc-arm-none-eabi"
+    log_warn "  cd /root/klipper && make menuconfig  # 选RP2040"
+    log_warn "  make -j4 && make flash FLASH_DEVICE=$MCU_SERIAL"
+fi
+
+# Klipper systemd 服务 (依赖MCU串口设备)
 cat > /etc/systemd/system/klipper.service << 'EOF'
 [Unit]
 Description=Klipper 3D Printer Firmware
 After=network.target
+Wants=dev-ttyACM0.device
 
 [Service]
 Type=simple
@@ -572,10 +738,24 @@ log_info "Klipper 服务已注册"
 log_step "Step 7/11: 安装 Moonraker"
 
 if [ ! -d "$MOONRAKER_DIR" ]; then
-    log_info "克隆 Moonraker..."
-    git clone --depth 1 https://github.com/Arksine/moonraker.git "$MOONRAKER_DIR" 2>&1 | tail -3
+    log_info "克隆 Moonraker (锁定commit: $MOONRAKER_COMMIT)..."
+    git clone https://github.com/Arksine/moonraker.git "$MOONRAKER_DIR" 2>&1 | tail -3
+    cd "$MOONRAKER_DIR"
+    git checkout "$MOONRAKER_COMMIT" 2>&1 | tail -3
+    log_info "Moonraker 版本: $(git log --oneline -1)"
+    cd /
 else
-    log_info "Moonraker 目录已存在"
+    log_info "Moonraker 目录已存在，检查版本..."
+    cd "$MOONRAKER_DIR"
+    CURRENT_COMMIT=$(git log --oneline -1 2>/dev/null | awk '{print $1}')
+    if [ "$CURRENT_COMMIT" != "$MOONRAKER_COMMIT" ]; then
+        log_warn "当前Moonraker commit($CURRENT_COMMIT)与锁定版本($MOONRAKER_COMMIT)不一致"
+        log_warn "切换到锁定版本..."
+        git fetch origin 2>/dev/null || true
+        git checkout "$MOONRAKER_COMMIT" 2>&1 | tail -3
+    fi
+    log_info "Moonraker 版本: $(git log --oneline -1)"
+    cd /
 fi
 
 if [ ! -d "$MOONRAKER_ENV" ]; then
@@ -616,7 +796,7 @@ enable_object_processing: False
 EOF
 
 # 安装 Fluidd 前端 (预编译release)
-FLUIDD_DIR=$ROOT_DIR/printer_data/companion/fluidd
+FLUIDD_DIR=$ROOT_DIR/printer_data/fluidd
 if [ ! -f "$FLUIDD_DIR/index.html" ]; then
     log_info "下载 Fluidd 前端 (预编译release)..."
     mkdir -p "$FLUIDD_DIR"
@@ -636,7 +816,7 @@ refresh_interval: 168
 [update_manager client fluidd]
 type: web
 repo: fluidd-core/fluidd
-path: ~/printer_data/companion/fluidd
+path: ~/printer_data/fluidd
 
 [webcam ${CAM_STREAM}]
 name: N1 Camera
@@ -717,6 +897,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStartPre=/bin/sleep 3
 ExecStart=/usr/local/bin/go2rtc -config /etc/go2rtc/go2rtc.yaml
 Restart=always
@@ -736,7 +917,7 @@ log_info "go2rtc 服务已注册 (摄像头: $CAM_DEV)"
 # Fluidd Web前端服务 (独立serve静态文件)
 cat > /usr/local/bin/fluidd-serve.sh << 'EOF'
 #!/bin/bash
-cd /root/printer_data/companion/fluidd
+cd /root/printer_data/fluidd
 exec python3 -m http.server 8080 --bind 0.0.0.0
 EOF
 chmod +x /usr/local/bin/fluidd-serve.sh
@@ -781,28 +962,47 @@ sleep 1
 
 log_info "所有服务已启动"
 
-# USB看门狗 v3 (交付级: XHCI死亡检测 + MCU断连5级递进恢复)
+# USB看门狗 v3 (智能版: XHCI致命立即reboot + Timeout累计后reboot + MCU 5级递进)
 cat > /usr/local/bin/usb-watchdog.sh << 'WDEOF'
 #!/bin/bash
 MCU_ID="usb-Klipper_rp2040"
 CHECK_INTERVAL=5
-MAX_FAIL=2
+MAX_FAIL=3
 FAIL_COUNT=0
+XHCI_FAIL_COUNT=0
+XHCI_REBOOT_THRESHOLD=6
 RECOVERY_LEVEL=0
 log() { logger -t usb-watchdog "$1"; }
 
-check_xhci_dead() {
-    dmesg | tail -20 | grep -qiE 'xHCI host controller not responding|HC died|xhci_hcd.*error'
+check_xhci_error() {
+    dmesg | tail -30 | grep -qiE 'HC died|xHCI host controller not responding'
+}
+
+check_xhci_timeout() {
+    dmesg | tail -30 | grep -qiE 'Timeout while waiting for setup device|unable to enumerate USB device|device descriptor read.*error -1[12]0|device not accepting address.*error -62'
 }
 
 while true; do
     sleep $CHECK_INTERVAL
 
-    # L0: XHCI死亡检测 → 直接reboot（最严重，不可恢复）
-    if check_xhci_dead; then
-        log "CRITICAL: XHCI host controller died! Rebooting immediately"
+    if check_xhci_error; then
+        log "CRITICAL: XHCI HC died! Rebooting"
         sleep 1
         reboot
+    fi
+
+    if check_xhci_timeout; then
+        XHCI_FAIL_COUNT=$((XHCI_FAIL_COUNT + 1))
+        log "XHCI timeout detected (count=$XHCI_FAIL_COUNT/$XHCI_REBOOT_THRESHOLD)"
+        if [ $XHCI_FAIL_COUNT -ge $XHCI_REBOOT_THRESHOLD ]; then
+            log "XHCI timeout threshold reached, rebooting"
+            sleep 1
+            reboot
+        fi
+    else
+        if [ $XHCI_FAIL_COUNT -gt 0 ]; then
+            XHCI_FAIL_COUNT=$((XHCI_FAIL_COUNT - 1))
+        fi
     fi
 
     if ls /dev/serial/by-id/ 2>/dev/null | grep -q "$MCU_ID"; then
@@ -844,11 +1044,10 @@ while true; do
                 echo "$dn" > /sys/bus/pci/drivers/xhci_hcd/bind 2>/dev/null
                 sleep 3
             done
-            systemctl restart klipper 2>/dev/null
-            systemctl restart moonraker 2>/dev/null
+            systemctl restart klipper moonraker 2>/dev/null
             sleep 8
         else
-            log "Recovery L5: full reboot (XHCI unrecoverable)"
+            log "Recovery L5: full reboot"
             sleep 2
             reboot
         fi
@@ -1041,7 +1240,7 @@ fi
 echo ""
 log_info "总控服务器端验证命令:"
 echo "  curl -s http://$N1_IP:7125/server/info   # Moonraker心跳"
-echo "  curl -s -o /dev/null http://$N1_IP:1984/api/frame.jpeg?src=camera0   # 截图"
+echo "  curl -s -o /dev/null http://$N1_IP:1984/api/frame.jpeg?src=${CAM_STREAM}   # 截图"
 echo "  ssh root@$N1_IP   # SSH连通 (密码: 1234)"
 echo ""
 log_info "后端会自动发现此设备 (DEVICE_IP范围需包含 $N1_IP)"
@@ -1050,7 +1249,38 @@ log_info "配置文件路径:"
 echo "  printer.cfg:   $PRINTER_DATA/config/printer.cfg"
 echo "  moonraker.conf: $PRINTER_DATA/config/moonraker.conf"
 echo "  go2rtc.yaml:    /etc/go2rtc/go2rtc.yaml"
+echo "  watchdog:       /usr/local/bin/usb-watchdog.sh (v3)"
 echo "  bt脚本:         /usr/local/bin/bt-speaker-connect.sh"
+
+# 自动注册到总控服务器
+echo ""
+log_info "尝试自动注册到总控服务器 ($SERVER_IP:8080)..."
+REGISTER_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 \
+    "http://$SERVER_IP:8080/api/v1/token" 2>/dev/null || echo "000")
+if [ "$REGISTER_HTTP" != "200" ]; then
+    log_warn "总控服务器不可达 (HTTP $REGISTER_HTTP)，跳过自动注册"
+    log_warn "请在总控前端手动添加设备: IP=$N1_IP"
+else
+    # 获取token
+    TOKEN=$(curl -s --connect-timeout 5 "http://$SERVER_IP:8080/api/v1/token" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+    if [ -n "$TOKEN" ]; then
+        # 注册设备
+        REG_RESULT=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 \
+            -X POST -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"ip\":\"$N1_IP\",\"hostname\":\"$(hostname)\"}" \
+            "http://$SERVER_IP:8080/api/v1/devices" 2>/dev/null || echo "000")
+        if [ "$REG_RESULT" = "201" ]; then
+            log_info "自动注册成功! (HTTP 201)"
+        elif [ "$REG_RESULT" = "409" ]; then
+            log_info "设备已注册 (HTTP 409，已存在)"
+        else
+            log_warn "自动注册失败 (HTTP $REG_RESULT)，请手动添加"
+        fi
+    else
+        log_warn "获取token失败，请手动添加设备"
+    fi
+fi
 
 # 保存部署信息
 cat > /root/n1_deploy_info.txt << DEPLOYEOF
@@ -1059,6 +1289,8 @@ SERVER_IP=$SERVER_IP
 BT_MAC=${BT_MAC:-none}
 MCU_SERIAL=$MCU_SERIAL
 CAMERA=$CAM_DEV
+CAM_STREAM=$CAM_STREAM
+HOSTNAME=$(hostname)
 DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 PASS=$PASS
 FAIL=$FAIL

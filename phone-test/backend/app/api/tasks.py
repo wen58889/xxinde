@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
 
 from app.database import get_db
 from app.auth import verify_token
@@ -31,6 +32,13 @@ async def execute_on_device(
         msg = str(e)
         if "not found" in msg:
             raise HTTPException(404, msg)
+        elif "ESTOP" in msg and "not ONLINE" in msg:
+            await device_manager.reset_device(device_id)
+            await asyncio.sleep(5)
+            try:
+                task_id = await scheduler.dispatch_task(device_id, yaml_content)
+            except ValueError:
+                raise HTTPException(409, f"Device {device_id} ESTOP复位后仍未恢复ONLINE，请稍后重试")
         elif "not ONLINE" in msg:
             raise HTTPException(409, msg)
         else:
@@ -86,6 +94,13 @@ async def run_yaml_on_device(
         msg = str(e)
         if "not found" in msg:
             raise HTTPException(404, msg)
+        elif "ESTOP" in msg and "not ONLINE" in msg:
+            await device_manager.reset_device(device_id)
+            await asyncio.sleep(5)
+            try:
+                task_id = await scheduler.dispatch_task(device_id, req.yaml_content)
+            except ValueError:
+                raise HTTPException(409, f"Device {device_id} ESTOP复位后仍未恢复ONLINE，请稍后重试")
         elif "not ONLINE" in msg:
             raise HTTPException(409, msg)
         else:

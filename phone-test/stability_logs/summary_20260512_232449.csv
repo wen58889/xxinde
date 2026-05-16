@@ -1,0 +1,5 @@
+时间戳,设备IP,状态,MCU状态,延迟ms,摄像头,Fluidd,错误
+2026-05-12 23:24:49,192.168.5.101,UNHEALTHY,parse_error,0,NO,NO,MCU:parse_error;CAM:ERR;FLUIDD:000;
+2026-05-12 23:24:53,192.168.5.102,UNHEALTHY,parse_error,0,NO,YES,MCU:parse_error;CAM:ERR;
+2026-05-12 23:25:24,192.168.5.101,UNHEALTHY,parse_error,0,NO,NO,MCU:parse_error;CAM:ERR;FLUIDD:000;
+2026-05-12 23:25:28,192.168.5.102,UNHEALTHY,parse_error,0,NO,YES,MCU:parse_error;CAM:ERR;

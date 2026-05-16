@@ -11,7 +11,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { useState, useEffect, useRef } from 'react'
 import { useRuleStore } from '../../stores/ruleStore'
 import { useLogStore } from '../../stores/logStore'
-import { templatesApi, tasksApi } from '../../api/devices'
+import { templatesApi, tasksApi, devicesApi, emergencyApi } from '../../api/devices'
 import { useDeviceStore } from '../../stores/deviceStore'
 import { colors } from '../../theme'
 import { rulesToYaml, yamlToRules } from '../../utils/rulesYaml'
@@ -133,7 +133,25 @@ export default function ScriptToolbar() {
     } catch (e: any) {
       const detail = e?.response?.data?.detail
       const msg = detail || (e instanceof Error ? e.message : String(e))
-      addLog(`运行失败: ${msg}`, 'error')
+
+      if (msg.includes('ESTOP')) {
+        addLog(`设备急停中，自动复位并重试...`, 'warn')
+        try {
+          await devicesApi.reset(selectedDeviceId)
+          addLog('复位指令已发送，等待恢复(5s)...', 'warn')
+          await new Promise(r => setTimeout(r, 5000))
+          const yaml = rulesToYaml(rules)
+          const res = await tasksApi.runYaml(selectedDeviceId, yaml) as any
+          addLog(`复位成功，任务已提交 #${res.id}`, 'success')
+        } catch (e2: any) {
+          const msg2 = e2?.response?.data?.detail || (e2 instanceof Error ? e2.message : String(e2))
+          addLog(`复位后仍无法运行: ${msg2}，请手动点击"复位"按钮`, 'error')
+        }
+      } else if (msg.includes('not ONLINE')) {
+        addLog(`设备未就绪: ${msg}，请等待设备恢复ONLINE后重试`, 'error')
+      } else {
+        addLog(`运行失败: ${msg}`, 'error')
+      }
     }
   }
 

@@ -87,17 +87,20 @@ class MotionController:
                 raise
 
     async def move_to(self, x: float, y: float, feed: int = DEFAULT_XY_FEED):
+        await self.client.ensure_ready()
         await self._safe_move_xy(x, y, feed)
         logger.info("[%s] Moved to X%.2f Y%.2f", self.client.ip, x, y)
 
     async def tap(self, x: float, y: float, z: float = TAP_Z):
         _validate_coord(x, y, z)
+        await self.client.ensure_ready()
         await self._safe_move_xy(x, y)
         await self._tap_z(z)
         logger.info("[%s] Tap at X%.2f Y%.2f Z%.2f", self.client.ip, x, y, z)
 
     async def long_press(self, x: float, y: float, seconds: float, z: float = TAP_Z):
         _validate_coord(x, y, z)
+        await self.client.ensure_ready()
         await self._safe_move_xy(x, y)
         z_feed = _clamp_feed(TAP_Z_FEED, Z_MAX_FEED)
         z_clamped = max(Z_MIN + _COORD_EPSILON, min(Z_MAX - _COORD_EPSILON, z))
@@ -124,6 +127,7 @@ class MotionController:
     ):
         _validate_coord(x1, y1, z)
         _validate_coord(x2, y2, z)
+        await self.client.ensure_ready()
         await self._safe_move_xy(x1, y1)
         z_feed = _clamp_feed(TAP_Z_FEED, Z_MAX_FEED)
         z_clamped = max(Z_MIN + _COORD_EPSILON, min(Z_MAX - _COORD_EPSILON, z))
@@ -152,10 +156,12 @@ class MotionController:
         )
 
     async def home(self):
+        await self.client.ensure_ready()
         await self.client.home()
         logger.info("[%s] Homed", self.client.ip)
 
     async def park_y(self):
+        await self.client.ensure_ready()
         y_park = Y_MIN + _COORD_EPSILON
         feed = _clamp_feed(DEFAULT_XY_FEED, XY_MAX_FEED)
         z_feed = _clamp_feed(DEFAULT_Z_FEED, Z_MAX_FEED)

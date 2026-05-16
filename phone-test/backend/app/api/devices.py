@@ -18,13 +18,29 @@ from app.services.device_manager import device_manager
 from app.services.screenshot import capture_screenshot, ScreenshotError, check_camera
 from app.services.coordinate import CoordinateMapper
 from app.services.motion import MotionController
-from app.services.moonraker_client import _get_shared_session, MoonrakerClient
+from app.services.moonraker_client import _get_shared_session, MoonrakerClient, DeviceConnectionError
+from app.services.ssh_tool import get_ssh_tool, SSHConnectionError, SSHAuthError, SSHCommandNotAllowedError
 from app.vision.manager import vision_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/devices", tags=["devices"])
 
 SCAN_CONCURRENCY = 15  # 扫描时最多15个并发探测
+
+
+async def _get_or_create_client(device_id: int, db: AsyncSession) -> MoonrakerClient:
+    """获取已有 MoonrakerClient 或从数据库重建"""
+    client = device_manager.get_client(device_id)
+    if client:
+        return client
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    dev = result.scalar_one_or_none()
+    if not dev:
+        raise HTTPException(404, f"Device {device_id} not found")
+    settings = get_settings()
+    client = MoonrakerClient(dev.ip, settings.device_moonraker_port)
+    device_manager._clients[device_id] = client
+    return client
 
 
 async def _probe_moonraker(ip: str, port: int, timeout: float = 2.0, *,
@@ -165,22 +181,25 @@ async def home_device(
     db: AsyncSession = Depends(get_db),
     _=Depends(verify_token),
 ):
-    client = device_manager.get_client(device_id)
-    if not client:
-        # 客户端未初始化，从数据库读取 IP 直接创建临时客户端
-        result = await db.execute(select(Device).where(Device.id == device_id))
-        dev = result.scalar_one_or_none()
-        if not dev:
-            raise HTTPException(404, f"Device {device_id} not found")
-        settings = get_settings()
-        from app.services.moonraker_client import MoonrakerClient as _MC, DeviceConnectionError
-        client = _MC(dev.ip, settings.device_moonraker_port)
-        device_manager._clients[device_id] = client  # register for future use
-    try:
-        await client.home()
-    except Exception as e:
-        raise HTTPException(502, f"G28 failed: {e}")
-    return {"message": f"Device {device_id} homing (G28) sent"}
+    client = await _get_or_create_client(device_id, db)
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            await client.ensure_ready(max_wait=25.0)
+            await client.home()
+            return {"message": f"Device {device_id} homing (G28) sent (attempt {attempt})"}
+        except Exception as e:
+            last_error = e
+            err_str = str(e).lower()
+            logger.warning(
+                "G28 attempt %d failed on device %d: %s", attempt, device_id, e
+            )
+            if "shutdown" in err_str or "tmcuart" in err_str or "homing" in err_str:
+                await asyncio.sleep(2)
+                continue
+            else:
+                break
+    raise HTTPException(502, f"G28 failed after {attempt} attempts: {last_error}")
 
 
 @router.post("/{device_id}/firmware_restart", response_model=MessageOut)
@@ -189,16 +208,7 @@ async def firmware_restart_device(
     db: AsyncSession = Depends(get_db),
     _=Depends(verify_token),
 ):
-    client = device_manager.get_client(device_id)
-    if not client:
-        result = await db.execute(select(Device).where(Device.id == device_id))
-        dev = result.scalar_one_or_none()
-        if not dev:
-            raise HTTPException(404, f"Device {device_id} not found")
-        settings = get_settings()
-        from app.services.moonraker_client import MoonrakerClient as _MC
-        client = _MC(dev.ip, settings.device_moonraker_port)
-        device_manager._clients[device_id] = client
+    client = await _get_or_create_client(device_id, db)
     await client.firmware_restart()
     return {"message": f"Device {device_id} firmware restarting"}
 
@@ -210,18 +220,10 @@ async def park_y_device(
     _=Depends(verify_token),
 ):
     """Y轴归位到0，让摄像头避开手机屏幕上方，以便拍摄清晰画面"""
-    client = device_manager.get_client(device_id)
-    if not client:
-        result = await db.execute(select(Device).where(Device.id == device_id))
-        dev = result.scalar_one_or_none()
-        if not dev:
-            raise HTTPException(404, f"Device {device_id} not found")
-        settings = get_settings()
-        from app.services.moonraker_client import MoonrakerClient as _MC
-        client = _MC(dev.ip, settings.device_moonraker_port)
-        device_manager._clients[device_id] = client
+    client = await _get_or_create_client(device_id, db)
     motion = MotionController(client)
     try:
+        await client.ensure_ready()
         await motion.park_y()
     except Exception as e:
         raise HTTPException(502, f"Park Y failed: {e}")
@@ -300,17 +302,9 @@ async def get_device_position(
     _=Depends(verify_token),
 ):
     """读取机械臂当前 XY 位置（mm），用于手眼标定"""
-    client = device_manager.get_client(device_id)
-    if not client:
-        result = await db.execute(select(Device).where(Device.id == device_id))
-        dev = result.scalar_one_or_none()
-        if not dev:
-            raise HTTPException(404, f"Device {device_id} not found")
-        settings = get_settings()
-        from app.services.moonraker_client import MoonrakerClient as _MC
-        client = _MC(dev.ip, settings.device_moonraker_port)
-        device_manager._clients[device_id] = client
+    client = await _get_or_create_client(device_id, db)
     try:
+        await client.ensure_ready()
         status = await client.get_printer_status()
         pos = (
             status.get("result", {})
@@ -326,6 +320,8 @@ async def get_device_position(
                 .get("position", [0, 0, 0, 0])
             )
         return {"x": round(pos[0], 3), "y": round(pos[1], 3), "z": round(pos[2], 3)}
+    except DeviceConnectionError as e:
+        raise HTTPException(502, f"Device not ready: {e}")
     except Exception as e:
         raise HTTPException(502, f"Failed to read position: {e}")
 
@@ -363,17 +359,13 @@ async def move_to_pixel(
         raise HTTPException(400, f"坐标转换失败: {e}")
 
     # 确保 Moonraker 客户端可用
-    client = device_manager.get_client(device_id)
-    if not client:
-        settings = get_settings()
-        from app.services.moonraker_client import MoonrakerClient as _MC
-        client = _MC(dev.ip, settings.device_moonraker_port)
-        device_manager._clients[device_id] = client
+    client = await _get_or_create_client(device_id, db)
 
     # 移动机械臂（安全动作：先升Z再走XY）
     move_error: str | None = None
     motion = MotionController(client)
     try:
+        await client.ensure_ready()
         await motion.move_to(mx, my)
     except Exception as e:
         move_error = str(e)
@@ -422,16 +414,12 @@ async def tap_pixel(
     except ValueError as e:
         raise HTTPException(400, f"坐标转换失败: {e}")
 
-    client = device_manager.get_client(device_id)
-    if not client:
-        settings = get_settings()
-        from app.services.moonraker_client import MoonrakerClient as _MC
-        client = _MC(dev.ip, settings.device_moonraker_port)
-        device_manager._clients[device_id] = client
+    client = await _get_or_create_client(device_id, db)
 
     tap_error: str | None = None
     motion = MotionController(client)
     try:
+        await client.ensure_ready()
         await motion.tap(mx, my)
     except Exception as e:
         tap_error = str(e)
@@ -508,3 +496,130 @@ async def diagnose_device(
     diag["camera"] = await check_camera(dev.ip)
 
     return diag
+
+
+@router.get("/{device_id}/diagnose_ssh")
+async def diagnose_ssh(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_token),
+):
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    dev = result.scalar_one_or_none()
+    if not dev:
+        raise HTTPException(404, "Device not found")
+
+    ssh = get_ssh_tool()
+    try:
+        report = await ssh.diagnose(dev.ip)
+    except SSHAuthError as e:
+        raise HTTPException(401, f"SSH auth failed: {e}")
+    except SSHConnectionError as e:
+        raise HTTPException(504, f"SSH connection failed: {e}")
+
+    return {
+        "device_id": device_id,
+        "ip": dev.ip,
+        "klippy_state": report.klippy_state,
+        "klippy_process_running": report.klippy_process_running,
+        "moonraker_process_running": report.moonraker_process_running,
+        "mcu_serial_devices": report.mcu_serial_devices,
+        "klippy_log": report.klippy_log[:2000],
+        "moonraker_log": report.moonraker_log[:1000],
+        "errors": report.errors,
+    }
+
+
+class SSHRepairRequest(BaseModel):
+    action: str
+
+
+@router.post("/{device_id}/repair_ssh")
+async def repair_ssh(
+    device_id: int,
+    req: SSHRepairRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_token),
+):
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    dev = result.scalar_one_or_none()
+    if not dev:
+        raise HTTPException(404, "Device not found")
+
+    service_map = {
+        "restart_klipper": "klipper",
+        "restart_moonraker": "moonraker",
+    }
+    service = service_map.get(req.action)
+    if not service:
+        raise HTTPException(400, f"Invalid action: {req.action}. Valid: restart_klipper, restart_moonraker")
+
+    ssh = get_ssh_tool()
+    try:
+        success = await ssh.restart_service(dev.ip, service)
+    except SSHAuthError as e:
+        raise HTTPException(401, f"SSH auth failed: {e}")
+    except SSHConnectionError as e:
+        raise HTTPException(504, f"SSH connection failed: {e}")
+    except SSHCommandNotAllowedError as e:
+        raise HTTPException(400, str(e))
+
+    klippy_state_after = None
+    if success:
+        client = device_manager.get_client(device_id)
+        if client:
+            await asyncio.sleep(3)
+            klippy_state_after = await client.get_klippy_state()
+
+    return {
+        "device_id": device_id,
+        "action": req.action,
+        "success": success,
+        "klippy_state_after": klippy_state_after,
+    }
+
+
+@router.post("/{device_id}/preflight")
+async def preflight_check(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_token),
+):
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    dev = result.scalar_one_or_none()
+    if not dev:
+        raise HTTPException(404, "Device not found")
+
+    settings = get_settings()
+    moonraker_result = {"reachable": False, "klippy_state": None}
+    client = device_manager.get_client(device_id)
+    if not client:
+        client = MoonrakerClient(dev.ip, settings.device_moonraker_port)
+
+    moonraker_result["reachable"] = await client.is_alive()
+    if moonraker_result["reachable"]:
+        moonraker_result["klippy_state"] = await client.get_klippy_state()
+
+    ssh = get_ssh_tool()
+    ssh_passed = False
+    ssh_message = ""
+    try:
+        ssh_passed, ssh_message = await ssh.preflight_check(dev.ip)
+    except SSHAuthError as e:
+        ssh_message = f"SSH auth failed: {e}"
+    except SSHConnectionError as e:
+        ssh_message = f"SSH connection failed: {e}"
+
+    all_passed = (
+        moonraker_result["reachable"]
+        and moonraker_result.get("klippy_state") == "ready"
+        and ssh_passed
+    )
+
+    return {
+        "device_id": device_id,
+        "ip": dev.ip,
+        "moonraker": moonraker_result,
+        "ssh_preflight": {"passed": ssh_passed, "message": ssh_message},
+        "all_passed": all_passed,
+    }

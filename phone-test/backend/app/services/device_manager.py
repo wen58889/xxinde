@@ -14,12 +14,12 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-HEARTBEAT_INTERVAL = 10  # seconds (was 5, too aggressive for 100+ devices)
-SUSPECT_THRESHOLD = 1    # missed heartbeats to become SUSPECT
-OFFLINE_THRESHOLD = 3    # missed heartbeats to become OFFLINE
-RECOVER_THRESHOLD = 2    # consecutive successes to recover
-MAX_CONCURRENT_CHECKS = 15  # 最多15台设备同时探测，避免连接风暴
-OFFLINE_CHECK_INTERVAL = 6  # 已确认离线的设备每6轮才检查1次（≈60s）
+SUSPECT_THRESHOLD = 1
+OFFLINE_THRESHOLD = 3
+RECOVER_THRESHOLD = 2
+SHUTDOWN_AUTO_RECOVER = True
+
+NON_READY_STATES = ("shutdown", "startup", "disconnected", "error")
 
 
 class DeviceManager:
@@ -34,9 +34,6 @@ class DeviceManager:
         return self._clients.get(device_id)
 
     async def init_devices(self):
-        """加载已有设备并为其创建 MoonrakerClient。
-        不再自动批量创建幽灵设备——设备只通过扫描发现后入库。
-        """
         settings = get_settings()
         async with async_session() as db:
             result = await db.execute(select(Device))
@@ -66,11 +63,13 @@ class DeviceManager:
                 await self._check_all()
             except Exception as e:
                 logger.error("Heartbeat error: %s", e)
-            await asyncio.sleep(HEARTBEAT_INTERVAL)
+            settings = get_settings()
+            await asyncio.sleep(settings.heartbeat_interval)
 
     async def _check_all(self):
+        settings = get_settings()
         if self._semaphore is None:
-            self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_CHECKS)
+            self._semaphore = asyncio.Semaphore(settings.heartbeat_max_concurrent)
         self._heartbeat_round += 1
 
         async with async_session() as db:
@@ -82,10 +81,9 @@ class DeviceManager:
                 client = self._clients.get(dev.id)
                 if not client:
                     continue
-                # 已确认离线的设备降频检查（每 OFFLINE_CHECK_INTERVAL 轮一次）
                 if (dev.status == DeviceStatus.OFFLINE
                         and dev.missed_heartbeats >= OFFLINE_THRESHOLD
-                        and self._heartbeat_round % OFFLINE_CHECK_INTERVAL != 0):
+                        and self._heartbeat_round % settings.heartbeat_offline_skip_rounds != 0):
                     continue
                 tasks.append(self._check_one_throttled(db, dev, client))
             if tasks:
@@ -97,13 +95,12 @@ class DeviceManager:
                              self._heartbeat_round, len(tasks), skipped)
 
     async def _check_one_throttled(self, db: AsyncSession, dev: Device, client: MoonrakerClient):
-        """带并发限制的单设备检查"""
         async with self._semaphore:
             await self._check_one(db, dev, client)
 
     async def _check_one(self, db: AsyncSession, dev: Device, client: MoonrakerClient):
         if dev.status == DeviceStatus.ESTOP:
-            return  # Skip ESTOP devices
+            return
 
         alive = await client.is_alive()
         now = datetime.now(timezone.utc)
@@ -122,9 +119,30 @@ class DeviceManager:
                     self._recover_count.pop(dev.id, None)
             else:
                 dev.status = DeviceStatus.ONLINE
+
+            if SHUTDOWN_AUTO_RECOVER and dev.status in (DeviceStatus.ONLINE, DeviceStatus.RECOVERING):
+                klippy_state = await client.get_klippy_state()
+                if klippy_state == "ready":
+                    if dev.status == DeviceStatus.RECOVERING:
+                        dev.status = DeviceStatus.ONLINE
+                        self._recover_count.pop(dev.id, None)
+                elif klippy_state in NON_READY_STATES:
+                    client.invalidate_ready_cache()
+                    logger.warning(
+                        "Device %d (%s) MCU state=%s detected in heartbeat, marking SUSPECT (recovery deferred to operation)",
+                        dev.id, dev.ip, klippy_state,
+                    )
+                    dev.status = DeviceStatus.SUSPECT
+                    await ws_manager.broadcast("device_status", {
+                        "device_id": dev.id,
+                        "ip": dev.ip,
+                        "status": f"MCU_{klippy_state.upper()}",
+                        "message": f"MCU {klippy_state} detected, recovery deferred to next operation",
+                    })
         else:
             dev.missed_heartbeats += 1
             self._recover_count.pop(dev.id, None)
+            client.invalidate_ready_cache()
             if dev.missed_heartbeats >= OFFLINE_THRESHOLD:
                 dev.status = DeviceStatus.OFFLINE
             elif dev.missed_heartbeats >= SUSPECT_THRESHOLD:
@@ -191,7 +209,6 @@ class DeviceManager:
             })
 
     async def reset_all(self):
-        """Reset all ESTOP devices: firmware_restart + set RECOVERING so heartbeat re-evaluates."""
         async with async_session() as db:
             result = await db.execute(select(Device).where(Device.status == DeviceStatus.ESTOP))
             devices = result.scalars().all()

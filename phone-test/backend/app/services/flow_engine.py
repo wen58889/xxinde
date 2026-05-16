@@ -40,6 +40,13 @@ class FlowEngine:
         total = len(steps)
         results = {"success": 0, "failed": 0, "stopped": False, "errors": []}
 
+        if total > 0:
+            try:
+                await self.motion.client.ensure_ready()
+                logger.info("[%d] Flow pre-check: MCU ready, cache warmed", self.device_id)
+            except Exception as e:
+                logger.warning("[%d] Flow pre-check failed: %s", self.device_id, e)
+
         for i, step in enumerate(steps):
             if self._stopped:
                 results["stopped"] = True

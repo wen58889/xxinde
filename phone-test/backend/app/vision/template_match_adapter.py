@@ -17,6 +17,9 @@ from app.vision.ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
 
+from concurrent.futures import ThreadPoolExecutor
+_vision_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="vision")
+
 
 class TemplateMatchAdapter(VisionAdapter):
     """OpenCV TM_CCOEFF_NORMED + PaddleOCR adapter.
@@ -66,8 +69,7 @@ class TemplateMatchAdapter(VisionAdapter):
             return None
 
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
+        result = await loop.run_in_executor(_vision_executor,
             partial(self._matcher.match_best, screenshot, path, threshold),
         )
         if result:
@@ -89,8 +91,7 @@ class TemplateMatchAdapter(VisionAdapter):
             return []
 
         loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(
-            None,
+        results = await loop.run_in_executor(_vision_executor,
             partial(self._matcher.match_template, screenshot, path, threshold),
         )
         return results
@@ -120,7 +121,7 @@ class TemplateMatchAdapter(VisionAdapter):
         # Strategy 2: check if all OCR keywords are present
         if ocr_keywords:
             loop = asyncio.get_event_loop()
-            texts = await loop.run_in_executor(
+            texts = await loop.run_in_executor(_vision_executor,
                 None,
                 partial(self._ocr.read_text, screenshot),
             )
@@ -140,8 +141,7 @@ class TemplateMatchAdapter(VisionAdapter):
 
     async def verify_action(self, before: bytes, after: bytes) -> float:
         loop = asyncio.get_event_loop()
-        ssim_score = await loop.run_in_executor(
-            None,
+        ssim_score = await loop.run_in_executor(_vision_executor,
             partial(OpenCVMatcher.compute_ssim, before, after),
         )
         logger.info("verify_action: SSIM=%.4f (low=changed, high=same)", ssim_score)
@@ -151,8 +151,7 @@ class TemplateMatchAdapter(VisionAdapter):
         self, screenshot: bytes, region: tuple[int, int, int, int] | None = None,
     ) -> list[TextResult]:
         loop = asyncio.get_event_loop()
-        ocr_results = await loop.run_in_executor(
-            None,
+        ocr_results = await loop.run_in_executor(_vision_executor,
             partial(self._ocr.read_text, screenshot, region),
         )
         # Convert OCRService.TextResult → adapter.TextResult
@@ -188,7 +187,7 @@ class TemplateMatchAdapter(VisionAdapter):
                 continue
 
             fpath = os.path.join(anomaly_dir, fname)
-            result = await loop.run_in_executor(
+            result = await loop.run_in_executor(_vision_executor,
                 None,
                 partial(self._matcher.match_best, screenshot, fpath, 0.80),
             )
@@ -210,7 +209,7 @@ class TemplateMatchAdapter(VisionAdapter):
         if app_name:
             app_dir = self._app_template_dir(app_name)
             if os.path.isdir(app_dir):
-                matches = await loop.run_in_executor(
+                matches = await loop.run_in_executor(_vision_executor,
                     None,
                     partial(self._matcher.match_all_templates, screenshot, app_dir, threshold),
                 )
@@ -225,7 +224,7 @@ class TemplateMatchAdapter(VisionAdapter):
         # Also match common templates
         common_dir = os.path.join(self._icons_dir, "_common")
         if os.path.isdir(common_dir):
-            matches = await loop.run_in_executor(
+            matches = await loop.run_in_executor(_vision_executor,
                 None,
                 partial(self._matcher.match_all_templates, screenshot, common_dir, threshold),
             )

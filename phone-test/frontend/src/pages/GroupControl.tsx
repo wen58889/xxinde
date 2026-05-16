@@ -244,7 +244,13 @@ export default function GroupControl() {
     const onlineIds = devices
       .filter(d => targetIds.includes(d.id) && d.status === 'ONLINE')
       .map(d => d.id)
+    const estopIds = devices
+      .filter(d => targetIds.includes(d.id) && d.status === 'ESTOP')
+      .map(d => d.id)
 
+    if (estopIds.length > 0) {
+      addLog(`${estopIds.length} 台设备急停中，已自动跳过 (可点"复位"恢复)`, 'warn')
+    }
     if (onlineIds.length === 0) { addLog('没有在线设备可运行', 'warn'); return }
 
     setRunningIds(new Set(onlineIds))
