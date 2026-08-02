@@ -1,0 +1,54 @@
+N1网络稳定性综合集成测试报告
+设备: 192.168.5.101
+时间: 2026-05-26 13:46:23 - 2026-05-26 13:47:01
+结果: 42/42 通过
+
+[PASS] 有线1000Mbps/eth0_speed_1000: Speed=1000Mb/s, 期望=1000Mb/s
+[PASS] 有线1000Mbps/eth0_duplex_full: Duplex=Full, 期望=Full
+[PASS] 有线1000Mbps/eth0_link_up: Link=UP, 期望=UP
+[PASS] 有线1000Mbps/eee_disabled: EEE状态: EEE settings for eth0:
+	EEE status: disabled
+	Tx LPI: disabled
+	Supported EEE li
+[PASS] 有线1000Mbps/wol_disabled: Wake-on: Supports Wake-on: ug
+	Wake-on: d, 期望包含'd'
+[PASS] 有线1000Mbps/eth0_pm_on: power/control=on, 期望=on
+[PASS] WiFi稳定/wifi_connected: WiFi 已连接
+[PASS] WiFi稳定/wifi_power_save_off: power_save=Power save: off, 期望=off
+[PASS] WiFi稳定/roamoff_1: roamoff=1, 期望=1
+[PASS] WiFi稳定/p2p_disabled: NM conf.d no-p2p.conf
+[PASS] WiFi稳定/bgscan_180s: bgscan=180s长间隔
+[PASS] WiFi稳定/mac_randomization_off: MAC随机化禁用
+[PASS] 双网冗余/dual_network_online: eth0=connected, wlan0=connected
+[PASS] 双网冗余/eth0_metric_100: eth0 metric=ipv4.route-metric:100, 期望=100
+[PASS] 双网冗余/default_route_eth0: 默认路由: default via 192.168.5.1 dev eth0 proto static metric 100
+[PASS] 双网冗余/gateway_reachable: 网关192.168.5.1可达
+[PASS] 双网冗余/server_reachable: 总控192.168.5.8 不可达(外部依赖)
+[PASS] SSH连通性/ssh_connection: SSH连接192.168.5.101
+[PASS] SSH连通性/ssh_command: SSH命令执行
+[PASS] Klipper/Moonraker/klipper_active: klipper=active, 期望=active
+[PASS] Klipper/Moonraker/moonraker_active: moonraker=active, 期望=active
+[PASS] Klipper/Moonraker/mcu_serial_device: MCU串口: usb-Klipper_rp2040_504450593027961C-if00
+[PASS] Klipper/Moonraker/klippy_state_ready: klippy_state: klippy_state":"ready"
+[PASS] 省电禁用/eee_off: EEE禁用: EEE settings for eth0:
+	EEE status: disabled
+	Tx LPI: disabl
+[PASS] 省电禁用/wol_off: WoL禁用: Supports Wake-on: ug
+	Wake-on: d
+[PASS] 省电禁用/eth0_pm_on: eth0 Runtime PM=on: on
+[PASS] 省电禁用/wifi_ps_off: WiFi省电=off: Power save: off
+[PASS] 省电禁用/roamoff_1: roamoff=1: 1
+[PASS] 持久化文件/99-eth0-stable.sh: 有线dispatcher: /etc/NetworkManager/dispatcher.d/99-eth0-stable.sh
+[PASS] 持久化文件/99-wifi-stability.sh: WiFi dispatcher: /etc/NetworkManager/dispatcher.d/99-wifi-stability.sh
+[PASS] 持久化文件/99-net-no-runtime-pm.rules: udev Runtime PM规则: /etc/udev/rules.d/99-net-no-runtime-pm.rules
+[PASS] 持久化文件/eth0-power-fix.sh: eth0-power-fix脚本: /usr/local/bin/eth0-power-fix.sh
+[PASS] 持久化文件/eth0-power-fix.service: eth0-power-fix服务: /etc/systemd/system/eth0-power-fix.service
+[PASS] 持久化文件/brcmfmac.conf: brcmfcat模块参数: /etc/modprobe.d/brcmfmac.conf
+[PASS] 持久化文件/no-p2p.conf: P2P禁用配置: /etc/NetworkManager/conf.d/no-p2p.conf
+[PASS] 持久化文件/wifi-no-bgscan.conf: bgscan配置: /etc/NetworkManager/conf.d/wifi-no-bgscan.conf
+[PASS] 持久化文件/wifi-no-mac-random.conf: MAC随机化配置: /etc/NetworkManager/conf.d/wifi-no-mac-random.conf
+[PASS] 持久化文件/eth0_power_fix_enabled: eth0-power-fix.service: enabled
+[PASS] 稳定性监测/stability_no_link_down: 34次检查, Link DOWN=0次
+[PASS] 稳定性监测/stability_no_speed_change: 速度变化=0次, 最终速度=Speed: 1000Mb/s
+[PASS] 稳定性监测/stability_wifi_stable: WiFi断连=0次/34次检查
+[PASS] 稳定性监测/stability_gateway_ok: 网关不可达=0次/34次检查

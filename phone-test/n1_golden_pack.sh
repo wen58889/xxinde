@@ -156,6 +156,10 @@ for item in \
     "$PRINTER_DATA/fluidd" \
 ; do
     if [ -d "$item" ]; then
+        if [ "$item" = "$PRINTER_DATA/fluidd" ] && [ ! -f "$item/index.html" ]; then
+            log_error "  ! $item 目录为空(Fluidd前端未安装)，打包后新设备将缺少Fluidd!"
+            log_error "    请先确保本设备Fluidd前端已下载到 $item/"
+        fi
         log_info "  + $item"
         PACK_LIST="$PACK_LIST $item"
     else

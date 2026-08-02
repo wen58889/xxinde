@@ -6,7 +6,6 @@ import logging
 import os
 
 from app.services.ssh_tool import get_ssh_tool, SSHConnectionError, SSHAuthError
-from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,7 @@ async def _ensure_pulse(conn) -> bool:
     r = await conn.run("pgrep -x pulseaudio", check=False)
     if r.exit_status == 0:
         return True
-    r2 = await conn.run("pulseaudio --start 2>/dev/null || pulseaudio -D --fail=quiet 2>/dev/null", check=False, timeout=5)
+    await conn.run("pulseaudio --start 2>/dev/null || pulseaudio -D --fail=quiet 2>/dev/null", check=False, timeout=5)
     await asyncio.sleep(0.5)
     r3 = await conn.run("pgrep -x pulseaudio", check=False)
     return r3.exit_status == 0
@@ -38,7 +37,6 @@ echo quit
 
 
 async def play_on_device(device_ip: str, local_audio_path: str) -> None:
-    s = get_settings()
     ssh = get_ssh_tool()
     remote_path = f"{N1_AUDIO_DIR}/{os.path.basename(local_audio_path)}"
     is_mp3 = local_audio_path.endswith(".mp3")

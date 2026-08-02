@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -72,7 +73,6 @@ app.include_router(settings_api.router)
 app.include_router(tts_api.router)
 app.include_router(agent_api.router)
 
-import os
 os.makedirs("static/tts", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

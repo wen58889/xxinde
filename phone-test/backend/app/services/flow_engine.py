@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import yaml
-from datetime import datetime, timezone
 
 from app.services.moonraker_client import MoonrakerClient
 from app.services.motion import MotionController
