@@ -8,6 +8,15 @@ import { useDeviceStore } from '../../stores/deviceStore'
 import { useLogStore } from '../../stores/logStore'
 import { devicesApi } from '../../api/devices'
 import { ensureToken } from '../../api/client'
+import type { DeviceStatus } from '../../types/device'
+
+const statusDot: Record<DeviceStatus, string> = {
+  ONLINE: '#69f0ae',
+  SUSPECT: '#ffb74d',
+  OFFLINE: '#ff5252',
+  RECOVERING: '#40c4ff',
+  ESTOP: '#ff6e40',
+}
 
 export default function DeviceToolbar() {
   const { devices, selectedDeviceId, setDevices, selectDevice, fetchDevices } = useDeviceStore()
@@ -126,10 +135,23 @@ export default function DeviceToolbar() {
         value={selectedDeviceId || ''}
         onChange={(e) => selectDevice(Number(e.target.value))}
         displayEmpty
-        sx={{ minWidth: 120, height: 32 }}
+        sx={{ minWidth: 160, height: 32 }}
+        renderValue={(val) => {
+          const d = devices.find((x) => x.id === val)
+          if (!d) return <Typography sx={{ color: '#888', fontSize: 14 }}>选择设备</Typography>
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: statusDot[d.status], display: 'inline-block' }} />
+              <Typography component="span" sx={{ fontSize: 14 }}>{d.hostname} ({d.ip})</Typography>
+            </Box>
+          )
+        }}
       >
         {devices.map((d) => (
-          <MenuItem key={d.id} value={d.id}>{d.hostname} ({d.ip})</MenuItem>
+          <MenuItem key={d.id} value={d.id}>
+            <Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: statusDot[d.status], display: 'inline-block', mr: 1 }} />
+            {d.hostname} ({d.ip}) — {d.status}
+          </MenuItem>
         ))}
       </Select>
       {selected && (

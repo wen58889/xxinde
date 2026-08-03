@@ -261,79 +261,6 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 """
 
-LINK_MONITOR_SERVICE = """[Unit]
-Description=N1 Wired Link Monitor
-After=network.target NetworkManager.service
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/link-monitor.sh
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-"""
-
-HEALTH_MONITOR_SERVICE = """[Unit]
-Description=N1 Health Monitor
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/n1-health-monitor.sh
-Restart=always
-RestartSec=15
-
-[Install]
-WantedBy=multi-user.target
-"""
-
-HEALTH_API_SERVICE = """[Unit]
-Description=N1 Health Status API (port 8090)
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/n1-health-api.py
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-"""
-
-N1_DIAGNOSE = r'''#!/bin/bash
-DIAG_DIR="/tmp/n1-diag-$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$DIAG_DIR"
-
-run() { echo "=== $1 ===" >> "$DIAG_DIR/diag.log"; eval "$1" >> "$DIAG_DIR/diag.log" 2>&1; }
-
-run "uname -a"
-run "uptime"
-run "free -h"
-run "df -h"
-run "cat /proc/cpuinfo | head -5"
-run "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null"
-run "ip addr show"
-run "ip route show"
-run "cat /etc/resolv.conf"
-run "ping -c 3 192.168.5.1 2>&1"
-run "ethtool eth0 2>/dev/null"
-run "ls /dev/serial/by-id/ 2>/dev/null"
-run "cat /sys/module/usbcore/parameters/autosuspend"
-run "systemctl status klipper --no-pager 2>/dev/null; echo '==='; systemctl status moonraker --no-pager 2>/dev/null; echo '==='; systemctl status go2rtc --no-pager 2>/dev/null; echo '==='; systemctl status usb-watchdog --no-pager 2>/dev/null; echo '==='; systemctl status n1-health-monitor --no-pager 2>/dev/null; echo '==='; systemctl status link-monitor --no-pager 2>/dev/null; echo '==='; systemctl status n1-health-api --no-pager 2>/dev/null" > "$DIAG_DIR/services.txt"
-run "curl -s http://localhost:7125/server/info 2>/dev/null"
-run "dmesg | tail -50"
-run "journalctl -u klipper --since '10 min ago' --no-pager 2>&1 | tail -20"
-run "journalctl -u usb-watchdog --since '10 min ago' --no-pager 2>&1 | tail -20"
-run "rfkill list 2>/dev/null"
-run "lsmod | grep brcmfmac"
-
-tar czf "/tmp/n1-diag-$(date +%Y%m%d_%H%M%S).tar.gz" -C /tmp "$(basename "$DIAG_DIR")" 2>/dev/null
-echo "诊断完成: $DIAG_DIR"
-echo "打包: /tmp/n1-diag-*.tar.gz"
-'''
 
 LOGROTATE_CONF = """/var/log/syslog
 /var/log/kern.log {
@@ -354,14 +281,6 @@ LOGROTATE_CONF = """/var/log/syslog
     copytruncate
 }
 
-/var/log/n1-health-monitor.log
-/var/log/n1-alert-queue.log {
-    daily
-    rotate 7
-    missingok
-    notifempty
-    copytruncate
-}
 """
 
 NTP_CONF = """[Time]
@@ -440,7 +359,7 @@ def deploy_service(client, name, service_content, enable=True, start=True):
         run_cmd(client, f"systemctl restart {name}.service 2>/dev/null || true")
 
 
-ALL_STEPS = list(range(1, 19))
+ALL_STEPS = list(range(1, 14))
 
 
 def fix_device(ip, steps=None, password=PASSWORD):
@@ -461,7 +380,7 @@ def fix_device(ip, steps=None, password=PASSWORD):
         log(f"{ip}: SSH连接成功")
 
         if 1 in steps:
-            log(f"{ip}: [1/17] 部署USB watchdog v5...")
+            log(f"{ip}: [1/13] 部署USB watchdog v5...")
             upload_text(client, "/usr/local/bin/usb-watchdog.sh", USB_WATCHDOG_V5)
             make_executable(client, "/usr/local/bin/usb-watchdog.sh")
             run_cmd(client, "systemctl restart usb-watchdog 2>/dev/null || true")
@@ -530,56 +449,7 @@ if [ -n "$CON" ]; then nmcli con mod "$CON" 802-3-ethernet.speed 0 2>/dev/null |
             log(f"{ip}: rfkill持久化service已部署")
 
         if 10 in steps:
-            log(f"{ip}: [10/17] 部署alert-push.sh...")
-            local_file = os.path.join(N1_DIR, "alert-push.sh")
-            if os.path.exists(local_file):
-                upload_local_file(client, local_file, "/usr/local/bin/alert-push.sh")
-            else:
-                warn(f"{ip}: 本地alert-push.sh不存在({local_file})，跳过")
-            make_executable(client, "/usr/local/bin/alert-push.sh")
-            log(f"{ip}: alert-push.sh已部署")
-
-        if 11 in steps:
-            log(f"{ip}: [11/17] 部署link-monitor.service...")
-            local_file = os.path.join(N1_DIR, "link-monitor.sh")
-            if os.path.exists(local_file):
-                upload_local_file(client, local_file, "/usr/local/bin/link-monitor.sh")
-                make_executable(client, "/usr/local/bin/link-monitor.sh")
-            else:
-                warn(f"{ip}: 本地link-monitor.sh不存在，跳过上传")
-            deploy_service(client, "link-monitor", LINK_MONITOR_SERVICE)
-            log(f"{ip}: link-monitor.service已部署")
-
-        if 12 in steps:
-            log(f"{ip}: [12/17] 部署n1-health-monitor.service...")
-            local_file = os.path.join(N1_DIR, "n1-health-monitor.sh")
-            if os.path.exists(local_file):
-                upload_local_file(client, local_file, "/usr/local/bin/n1-health-monitor.sh")
-                make_executable(client, "/usr/local/bin/n1-health-monitor.sh")
-            else:
-                warn(f"{ip}: 本地n1-health-monitor.sh不存在，跳过上传")
-            deploy_service(client, "n1-health-monitor", HEALTH_MONITOR_SERVICE)
-            log(f"{ip}: n1-health-monitor.service已部署")
-
-        if 13 in steps:
-            log(f"{ip}: [13/17] 部署n1-health-api.service (端口8090)...")
-            local_file = os.path.join(N1_DIR, "n1-health-api.py")
-            if os.path.exists(local_file):
-                upload_local_file(client, local_file, "/usr/local/bin/n1-health-api.py")
-                make_executable(client, "/usr/local/bin/n1-health-api.py")
-            else:
-                warn(f"{ip}: 本地n1-health-api.py不存在，跳过上传")
-            deploy_service(client, "n1-health-api", HEALTH_API_SERVICE)
-            log(f"{ip}: n1-health-api.service已部署")
-
-        if 14 in steps:
-            log(f"{ip}: [14/17] 部署n1-diagnose.sh...")
-            upload_text(client, "/usr/local/bin/n1-diagnose.sh", N1_DIAGNOSE)
-            make_executable(client, "/usr/local/bin/n1-diagnose.sh")
-            log(f"{ip}: n1-diagnose.sh已部署")
-
-        if 15 in steps:
-            log(f"{ip}: [15/17] 配置硬件看门狗...")
+            log(f"{ip}: [10/13] 配置硬件看门狗...")
             run_cmd(client, """if [ -e /dev/watchdog ]; then
     if grep -q '^WatchdogSec=' /etc/systemd/system.conf 2>/dev/null; then
         sed -i 's/^WatchdogSec=.*/WatchdogSec=60/' /etc/systemd/system.conf 2>/dev/null || true
@@ -591,8 +461,8 @@ if [ -n "$CON" ]; then nmcli con mod "$CON" 802-3-ethernet.speed 0 2>/dev/null |
 fi""")
             log(f"{ip}: 硬件看门狗已配置")
 
-        if 16 in steps:
-            log(f"{ip}: [16/17] 配置NTP + logrotate...")
+        if 11 in steps:
+            log(f"{ip}: [11/13] 配置NTP + logrotate...")
             run_cmd(client, """if command -v timedatectl &>/dev/null; then
     systemctl enable systemd-timesyncd 2>/dev/null || true
     systemctl start systemd-timesyncd 2>/dev/null || true
@@ -601,13 +471,13 @@ fi""")
             upload_text(client, "/etc/logrotate.d/n1-stability", LOGROTATE_CONF)
             log(f"{ip}: NTP + logrotate已配置")
 
-        if 17 in steps:
-            log(f"{ip}: [17/18] 重启usb-watchdog (加载alert-push)...")
+        if 12 in steps:
+            log(f"{ip}: [12/13] 重启usb-watchdog...")
             run_cmd(client, "systemctl restart usb-watchdog 2>/dev/null || true")
             log(f"{ip}: usb-watchdog已重启")
 
-        if 18 in steps:
-            log(f"{ip}: [18/18] 修复Fluidd WebSocket周期性断连 (ping_interval 10s→30s)...")
+        if 13 in steps:
+            log(f"{ip}: [13/13] 修复Fluidd WebSocket周期性断连 (ping_interval 10s→30s)...")
             out, _, rc = run_cmd(client,
                 "grep -q 'websocket_ping_interval.*else 10\\.' "
                 "/root/moonraker/moonraker/components/application.py 2>/dev/null && echo NEED_FIX || echo OK")
@@ -633,11 +503,6 @@ fi""")
         log(f"{ip}: klippy={state} | mcu={mcu} | autosuspend={autosuspend} | rfkill={rfkill}")
         log(f"{ip}: usb-autosuspend-fix={svc_as} | nmcli_wifi={nm_wifi}")
 
-        if 10 in steps or 11 in steps or 12 in steps or 13 in steps:
-            lm, _, _ = run_cmd(client, "systemctl is-active link-monitor 2>/dev/null || echo inactive")
-            hm, _, _ = run_cmd(client, "systemctl is-active n1-health-monitor 2>/dev/null || echo inactive")
-            ha, _, _ = run_cmd(client, "systemctl is-active n1-health-api 2>/dev/null || echo inactive")
-            log(f"{ip}: 工业级: link-monitor={lm} | health-monitor={hm} | health-api={ha}")
 
         if state == "ready" and autosuspend == "-1" and svc_as == "enabled" and rfkill == "yes":
             log(f"{ip}: 修复成功!")
